@@ -244,31 +244,18 @@ def generate_instagram_post(store_name):
             "Content-Type": "application/json"
         }
         
-        prompt = f"""당신은 팔로워 10만 이상의 인기 편의점 인스타그램 계정 운영자입니다.
-{store_name}의 신상 제품을 소개하는 인스타그램 게시물을 작성해주세요.
-
-요구사항:
-1. 캡션: 3-5줄, 이모지 풍부하게 사용, MZ세대 말투
-2. 구체적인 제품 1-2개 언급 (제품명 + 가격)
-3. 해시태그: 15-20개 (편의점, 신상, 꿀조합 관련)
-
-예시:
-오늘 {store_name}에서 대박 신상 발견했어요! 🔥
-딸기 생크림 케이크 (3,500원) 완전 맛있더라구요 🍰
-케이크 + 아메리카노 조합은 진짜 레전드... 💕
-여러분도 꼭 드셔보세요! 후회 안 해요 ✨
-
-JSON 형식:
-{{"caption": "캡션", "hashtags": "#편의점신상 #태그2 ...", "product_images": ["크롤링한 이미지 URL들"]}}
-"""
+        # 프롬프트 짧게 수정
+        prompt = f"""{store_name} 편의점 신상 제품 인스타그램 캡션 작성.
+요즘 핫한 신상 1-2개 소개, 이모지 사용, MZ세대 말투, 3-5줄.
+해시태그 15개 포함.
+JSON 형식: {{"caption": "캡션 내용", "hashtags": "#편의점신상 #태그들..."}}"""
         
         data = {
             "model": "gpt-4o-mini",
             "messages": [
-                {"role": "system", "content": "당신은 편의점 인스타 전문가입니다."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.95,
+            "temperature": 0.9,
             "response_format": {"type": "json_object"}
         }
         
@@ -293,7 +280,6 @@ JSON 형식:
         print(f"  ❌ 실패: {e}")
         traceback.print_exc()
         return None
-
 
 # ========================================
 # 워드프레스 발행
@@ -366,84 +352,39 @@ def send_slack_with_image(message, image_url):
 
 
 def send_instagram_to_slack(caption, hashtags, store, image_urls):
-    """인스타그램 콘텐츠를 슬랙으로 전송 (버튼 포함)"""
+    """인스타그램 콘텐츠를 슬랙으로 전송"""
     try:
-        # 이미지 링크 버튼 생성
-        image_buttons = []
-        for idx, url in enumerate(image_urls[:5], 1):
-            image_buttons.append({
-                "type": "button",
-                "text": {
-                    "type": "plain_text",
-                    "text": f"📷 이미지 {idx} 보기",
-                    "emoji": True
-                },
-                "url": url
-            })
-        
-        # 슬랙 메시지 구조
-        blocks = [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": f"📱 {store} 인스타그램 콘텐츠 준비 완료!",
-                    "emoji": True
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*캡션:*\n{caption}"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*해시태그:*\n{hashtags}"
-                }
-            },
-            {
-                "type": "divider"
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*제품 이미지:* {len(image_urls)}개 발견\n\n✅ *업로드 방법:*\n1. 아래 버튼을 눌러 이미지 확인\n2. 마음에 드는 이미지 다운로드\n3. 인스타그램 앱에서 업로드!"
-                }
-            }
-        ]
-        
-        # 이미지 버튼 추가
-        if image_buttons:
-            blocks.append({
-                "type": "actions",
-                "elements": image_buttons
-            })
-        
-        # 첫 번째 이미지 미리보기
+        # 이미지 링크들
+        image_text = ""
         if image_urls:
-            blocks.append({
-                "type": "image",
-                "image_url": image_urls[0],
-                "alt_text": f"{store} 제품 이미지"
-            })
+            for idx, url in enumerate(image_urls[:3], 1):
+                image_text += f"\n🖼️ <{url}|이미지 {idx} 다운로드>"
+        else:
+            image_text = "\n⚠️ 이미지를 찾지 못했습니다."
         
-        payload = {
-            "blocks": blocks
-        }
+        message = f"""📱 *{store} 인스타그램 콘텐츠*
+
+*캡션:*
+{caption}
+
+*해시태그:*
+{hashtags}
+
+*이미지:*{image_text}
+
+---
+✅ *업로드 방법:*
+1. 위 링크 클릭해서 이미지 다운로드
+2. 인스타그램 앱 열기
+3. 캡션 + 해시태그 복사
+4. 이미지와 함께 업로드!
+"""
         
-        response = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
-        return response.status_code == 200
+        return send_slack(message)
         
     except Exception as e:
         print(f"  ❌ 슬랙 전송 실패: {e}")
-        traceback.print_exc()
         return False
-
 
 # ========================================
 # 메인 함수
