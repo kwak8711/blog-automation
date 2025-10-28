@@ -375,6 +375,17 @@ def send_instagram_to_slack(caption, hashtags, store, image_urls):
 # 메인
 # ========================================
 def main():
+    """
+    메인 실행:
+    - 08:00 / 20:00 예약 슬롯 계산
+    - 블로그 글 생성 → 워드프레스 예약발행 → 구글시트 로깅
+    - 인스타 캡션 생성 → 슬랙 전송
+    - 요약 + 퀵액션(인스타/네이버) 카드 전송
+    - 429/네트워크 오류 자동 재시도(지수 백오프)
+    """
+    import time
+    from datetime import datetime
+
     print("=" * 60)
     print(f"🚀 편의점 신상 자동화 시작: {datetime.now(JST)}")
     print("=" * 60)
@@ -383,83 +394,150 @@ def main():
     wp_results = []
     ig_results = []
 
-    # 1) 오늘 기준 예약 슬롯 계산 (08:00, 20:00)
-    slots = next_slots_8am_8pm(count=POSTS_PER_DAY)
-    print(f"\n🕗 예약 슬롯: {[dt.strftime('%Y-%m-%d %H:%M') for dt in slots]} (JST)")
+    # ---------------------------
+    # 내부 헬퍼: 재시도 래퍼
+    # ---------------------------
+    def _call_with_retry(fn, label, max_attempts=4, backoffs=(3, 8, 20, 40)):
+        """
+        fn: 호출할 람다 또는 함수
+        label: 로그용 라벨
+        max_attempts: 시도 횟수
+        backoffs: 시도 사이 대기(초), 429/5xx에 특히 유용
+        """
+        attempt = 0
+        last_err = None
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                return fn()
+            except Exception as e:
+                last_err = e
+                # 429나 5xx면 백오프, 그 외도 1~2회는 재시도
+                wait = backoffs[min(attempt - 1, len(backoffs) - 1)]
+                msg = getattr(e, "response", None)
+                code = getattr(msg, "status_code", None)
+                print(f"  ⚠️ {label} 실패 #{attempt}: {e} (status={code}) → {wait}s 대기 후 재시도")
+                time.sleep(wait)
+        print(f"  ❌ {label} 최종 실패: {last_err}")
+        return None
 
-    # 2) 워드프레스 글 생성 + 예약발행
-    print(f"\n📝 워드프레스 블로그 {POSTS_PER_DAY}개 *예약발행* 설정 중...")
+    # ---------------------------
+    # 1) 예약 슬롯 계산 (08:00, 20:00)
+    # ---------------------------
+    try:
+        slots = next_slots_8am_8pm(count=POSTS_PER_DAY)
+    except Exception as e:
+        print("❌ 예약 슬롯 계산 실패:", e)
+        # 슬롯 계산 실패 시 즉시발행로 폴백
+        slots = [None] * POSTS_PER_DAY
+
+    print(f"\n🕗 예약 슬롯: {[(dt.strftime('%Y-%m-%d %H:%M') if dt else '즉시발행') for dt in slots]} (JST)")
+    print("\n📝 워드프레스 블로그 생성 및 예약발행 중…")
     print("-" * 60)
+
+    # ---------------------------
+    # 2) 블로그 생성 → 예약발행 → 시트 로깅
+    # ---------------------------
     for i in range(POSTS_PER_DAY):
         store = stores[i % len(stores)]
-        scheduled_at = slots[i]
-        print(f"\n[{i+1}/{POSTS_PER_DAY}] {store} @ {scheduled_at.strftime('%Y-%m-%d %H:%M')}")
+        scheduled_at = slots[i] if i < len(slots) else None
+        print(f"\n[{i+1}/{POSTS_PER_DAY}] {store} @ {(scheduled_at.strftime('%Y-%m-%d %H:%M') if scheduled_at else '즉시발행')}")
 
-        content = generate_blog_post(store)
-        if content:
-            result = publish_to_wordpress(
+        # (A) 글 생성 (OpenAI) — 재시도 포함
+        print(f"📝 {store} 블로그 글 생성 중…")
+        content = _call_with_retry(lambda: generate_blog_post(store), label=f"generate_blog_post({store})")
+        if not content:
+            print("  ❌ 생성 실패 → 이 항목 건너뜀")
+            continue
+
+        # (B) 워드프레스 발행/예약 — 재시도 포함
+        def _publish():
+            return publish_to_wordpress(
                 content['title'],
                 content['content'],
                 content['tags'],
                 content.get('featured_image', ''),
-                scheduled_dt_jst=scheduled_at
+                scheduled_dt_jst=scheduled_at  # None이면 즉시 발행
             )
-        if result['success']:
-            wp_results.append({
+        result = _call_with_retry(_publish, label="publish_to_wordpress")
+        if result and result.get('success'):
+            # 결과 적재
+            wp_item = {
                 'store': store,
                 'title': content['title'],
                 'url': result['url'],
-                'post_id': result['post_id']
-            })
+                'post_id': result.get('post_id'),
+                'when': scheduled_at.strftime('%Y-%m-%d %H:%M') if scheduled_at else ''
+            }
+            wp_results.append(wp_item)
 
-            # ✅ 🔗 구글시트 즉시 로깅
-            log_wp_post_to_sheet(
-                post_id=result['post_id'],
-                status='publish',
-                title=content['title'],
-                store=store,
-                scheduled_at='',
-                published_at=datetime.now(JST).strftime('%Y-%m-%d %H:%M'),
-                url=result['url'],
-                featured_image=content.get('featured_image', ''),
-                tags=content.get('tags', [])
-            )
+            # (C) 구글시트 로깅 (예약/즉시 구분)
+            try:
+                log_wp_post_to_sheet(
+                    post_id=wp_item['post_id'],
+                    status='future' if scheduled_at else 'publish',
+                    title=content['title'],
+                    store=store,
+                    scheduled_at=scheduled_at.strftime('%Y-%m-%d %H:%M') if scheduled_at else '',
+                    published_at='' if scheduled_at else datetime.now(JST).strftime('%Y-%m-%d %H:%M'),
+                    url=wp_item['url'],
+                    featured_image=content.get('featured_image', ''),
+                    tags=content.get('tags', [])
+                )
+            except Exception as e:
+                print("  ⚠️ 시트 로깅 실패(계속 진행):", e)
+        else:
+            print("  ❌ 발행 실패 → 이 항목 건너뜀")
 
-        time.sleep(10)
+        # API 레이트 방지
+        time.sleep(3)
 
-    # 3) 인스타그램 콘텐츠 슬랙 전송 (승인 대기)
-    print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 및 슬랙 전송 중...")
+    # ---------------------------
+    # 3) 인스타 캡션 생성 → 슬랙 전송
+    # ---------------------------
+    print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 및 슬랙 전송 중…")
     print("-" * 60)
     for i in range(INSTAGRAM_POSTS_PER_DAY):
         store = stores[i % len(stores)]
         print(f"\n[{i+1}/{INSTAGRAM_POSTS_PER_DAY}] {store}")
-        content = generate_instagram_post(store)
-        if content:
-            if send_instagram_to_slack(
-                content.get('caption', ''),
-                content.get('hashtags', ''),
+
+        ig_content = _call_with_retry(lambda: generate_instagram_post(store), label=f"generate_instagram_post({store})")
+        if not ig_content:
+            print("  ❌ 인스타 생성 실패 → 건너뜀")
+            continue
+
+        ok = _call_with_retry(
+            lambda: send_instagram_to_slack(
+                ig_content.get('caption', ''),
+                ig_content.get('hashtags', ''),
                 store,
-                content.get('image_urls', [])
-            ):
-                ig_results.append({'store': store, 'status': '슬랙 전송 완료 (승인 대기)'})
-        time.sleep(3)
+                ig_content.get('image_urls', [])
+            ),
+            label="send_instagram_to_slack"
+        )
+        if ok:
+            ig_results.append({'store': store, 'status': '슬랙 전송 완료 (승인 대기)'})
+        else:
+            print("  ⚠️ 슬랙 전송 실패(계속 진행)")
 
+        time.sleep(2)
+
+    # ---------------------------
     # 4) 요약 + 퀵액션 버튼
-    summary = f"🎉 *자동화 완료!*\n\n📝 *워드프레스 예약발행:* {len(wp_results)}개"
-    for r in wp_results:
-        summary += f"\n   • {r['store']}: {r['title'][:30]}... ⏰ {r['when']}\n     → {r['url']}"
-    summary += f"\n\n📱 *인스타그램 준비:* {len(ig_results)}개 (슬랙에서 확인 후 수동 업로드)"
-    for r in ig_results:
-        summary += f"\n   • {r['store']}: {r['status']}"
-    summary += f"\n\n⏰ 완료 시간: {datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S')}"
+    # ---------------------------
+    try:
+        send_summary_with_buttons(wp_results, ig_results)
+    except Exception as e:
+        print("⚠️ 요약 카드 전송 실패:", e)
 
-    send_slack(summary)
-    send_slack_quick_actions(title="업로드 채널 바로가기 ✨")
-    print(f"\n✅ 전체 작업 완료!")
+    try:
+        send_slack_quick_actions(title="업로드 채널 바로가기 ✨")
+    except Exception as e:
+        print("⚠️ 퀵액션 전송 실패:", e)
+
+    # 콘솔 요약 출력
+    summary = f"\n🎉 작업 요약\n- 워드프레스: {len(wp_results)}건\n- 인스타 준비: {len(ig_results)}건\n⏰ 완료: {datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S')}"
     print(summary)
-
-if __name__ == "__main__":
-    main()
 
     # =========================
 # Google Sheets 로깅 유틸
