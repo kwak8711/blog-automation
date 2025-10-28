@@ -404,14 +404,28 @@ def main():
                 content.get('featured_image', ''),
                 scheduled_dt_jst=scheduled_at
             )
-            if result.get('success'):
-                wp_results.append({
-                    'store': store,
-                    'title': content['title'],
-                    'url': result['url'],
-                    'when': scheduled_at.strftime('%Y-%m-%d %H:%M')
-                })
-        time.sleep(5)
+        if result['success']:
+            wp_results.append({
+                'store': store,
+                'title': content['title'],
+                'url': result['url'],
+                'post_id': result['post_id']
+            })
+
+            # ✅ 🔗 구글시트 즉시 로깅
+            log_wp_post_to_sheet(
+                post_id=result['post_id'],
+                status='publish',
+                title=content['title'],
+                store=store,
+                scheduled_at='',
+                published_at=datetime.now(JST).strftime('%Y-%m-%d %H:%M'),
+                url=result['url'],
+                featured_image=content.get('featured_image', ''),
+                tags=content.get('tags', [])
+            )
+
+        time.sleep(10)
 
     # 3) 인스타그램 콘텐츠 슬랙 전송 (승인 대기)
     print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 및 슬랙 전송 중...")
@@ -446,3 +460,136 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    # =========================
+# Google Sheets 로깅 유틸
+# =========================
+import gspread
+from google.oauth2.service_account import Credentials
+
+GOOGLE_SHEETS_ID = os.environ.get('GOOGLE_SHEETS_ID')
+GOOGLE_SA_JSON   = os.environ.get('GOOGLE_SA_JSON')  # 서비스계정 JSON 파일 경로
+
+SHEET_NAME = 'WP_POSTS'  # 시트 탭 이름
+
+def _get_sheets_client():
+    if not (GOOGLE_SHEETS_ID and GOOGLE_SA_JSON):
+        raise RuntimeError('환경변수 GOOGLE_SHEETS_ID 또는 GOOGLE_SA_JSON 미설정')
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_file(GOOGLE_SA_JSON, scopes=scopes)
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_key(GOOGLE_SHEETS_ID)
+    try:
+        ws = sh.worksheet(SHEET_NAME)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=SHEET_NAME, rows=1000, cols=20)
+        ws.append_row([
+            "logged_at(JST)","post_id","status","title","store","scheduled_at(JST)",
+            "published_at(JST)","url","featured_image","tags_csv"
+        ])
+    return ws
+
+def log_wp_post_to_sheet(post_id:int, status:str, title:str, store:str, 
+                         scheduled_at:str, published_at:str, url:str, featured_image:str, tags:list):
+    """
+    status: publish | future
+    scheduled_at/published_at: 'YYYY-MM-DD HH:MM' 또는 '' 
+    """
+    try:
+        ws = _get_sheets_client()
+        ws.append_row([
+            datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S'),
+            str(post_id),
+            status,
+            title,
+            store or '',
+            scheduled_at or '',
+            published_at or '',
+            url or '',
+            featured_image or '',
+            ",".join(tags or [])
+        ])
+        print("  ✅ 구글시트 로깅 완료")
+    except Exception as e:
+        print("  ❌ 구글시트 로깅 실패:", e)
+
+# =========================
+# 과거 글 백필(전체 동기화)
+# - WordPress REST API 사용
+# =========================
+from urllib.parse import urljoin
+import math
+import base64
+
+def _wp_rest_get(path, page=1, per_page=100):
+    """
+    WordPress Application Password(또는 기본 비번)로 Basic Auth 권장
+    - WORDPRESS_USERNAME, WORDPRESS_PASSWORD 사용
+    """
+    api_base = urljoin(WORDPRESS_URL if WORDPRESS_URL.endswith('/') else WORDPRESS_URL+'/', 'wp-json/wp/v2/')
+    url = f"{api_base}{path}?per_page={per_page}&page={page}"
+    auth = (WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
+    r = requests.get(url, auth=auth, timeout=20)
+    if r.status_code == 200:
+        total = int(r.headers.get('X-WP-Total', '0') or 0)
+        total_pages = int(r.headers.get('X-WP-TotalPages', '1') or 1)
+        return r.json(), total, total_pages
+    else:
+        raise RuntimeError(f"REST 호출 실패 {r.status_code}: {r.text}")
+
+def sync_all_wp_posts_to_sheet():
+    """
+    게시글 전체를 시트에 백필(중복 허용; 필요시 시트에서 post_id로 중복 제거)
+    - 상태: publish/future/draft 등도 가져옴(필요시 상태 필터링 가능)
+    """
+    try:
+        ws = _get_sheets_client()
+        # 헤더가 없으면 생성 (안전장치)
+        if ws.cell(1,1).value != "logged_at(JST)":
+            ws.update('A1', [[
+                "logged_at(JST)","post_id","status","title","store","scheduled_at(JST)",
+                "published_at(JST)","url","featured_image","tags_csv"
+            ]])
+        page = 1
+        per_page = 100
+        while True:
+            posts, total, total_pages = _wp_rest_get('posts', page=page, per_page=per_page)
+            if not posts:
+                break
+            rows = []
+            for p in posts:
+                post_id = p.get('id')
+                status  = p.get('status')  # 'publish'/'future'/'draft'
+                title   = (p.get('title') or {}).get('rendered','').strip()
+                link    = p.get('link','')
+                # 날짜
+                date_local = (p.get('date') or '')[:16].replace('T',' ')     # 워드프레스 로컬
+                date_gmt   = (p.get('date_gmt') or '')[:16].replace('T',' ')
+                scheduled_at = date_local if status == 'future' else ''
+                published_at = date_local if status == 'publish' else ''
+                # 대표 이미지
+                feat = ''
+                if p.get('featured_media'):
+                    # 미디어 상세까지 내려면 /media/{id} 추가 호출 필요하지만, 간단히 링크 칼럼만
+                    feat = str(p.get('featured_media'))
+                # 태그 CSV
+                tags_csv = ''
+                tag_ids = p.get('tags') or []
+                if tag_ids:
+                    # 간단히 ID 리스트만 CSV로; 이름이 필요하면 /tags?include=... 추가 호출
+                    tags_csv = ",".join(map(str, tag_ids))
+                rows.append([
+                    datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S'),
+                    str(post_id), status, title, "",  # store는 알 수 없으니 공란
+                    scheduled_at, published_at, link, feat, tags_csv
+                ])
+            if rows:
+                ws.append_rows(rows, value_input_option='USER_ENTERED')
+                print(f"  ✅ {page}/{total_pages} 페이지 기록 완료 ({len(rows)}건)")
+            if page >= total_pages:
+                break
+            page += 1
+        print("🎉 과거 글 백필 완료!")
+    except Exception as e:
+        print("❌ 백필 실패:", e)
+
