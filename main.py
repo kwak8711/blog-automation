@@ -23,8 +23,8 @@ WORDPRESS_PASSWORD   = os.environ.get('WORDPRESS_PASSWORD')
 INSTAGRAM_PROFILE_URL = os.environ.get('INSTAGRAM_PROFILE_URL', 'https://instagram.com/')
 NAVER_BLOG_URL        = os.environ.get('NAVER_BLOG_URL', 'https://blog.naver.com/')
 
-POSTS_PER_DAY = 2
-INSTAGRAM_POSTS_PER_DAY = 2
+POSTS_PER_DAY = 3
+INSTAGRAM_POSTS_PER_DAY = 3
 
 # 편의점 공식 사이트 URL
 STORE_URLS = {
@@ -38,30 +38,33 @@ JST = ZoneInfo('Asia/Tokyo')
 # ========================================
 # 예약 슬롯 계산: 오늘/내일 08:00, 20:00
 # ========================================
-def next_slots_8am_8pm(count=2):
+def next_slots_8_12_20(count=3):
     """
-    지금 시각 기준으로 가장 가까운 08:00, 20:00부터 순서대로 count개 반환 (JST)
+    지금 시각 기준으로 가장 가까운 08:00, 12:00, 20:00부터 순서대로 count개 반환 (JST)
     반환: [datetime(JST), ...]
     """
     now = datetime.now(JST)
     today_8 = now.replace(hour=8,  minute=0, second=0, microsecond=0)
+    today_12 = now.replace(hour=12, minute=0, second=0, microsecond=0)
     today_20 = now.replace(hour=20, minute=0, second=0, microsecond=0)
 
     candidates = []
+    
+    # 현재 시각 기준으로 다음 슬롯부터 추가
     if now <= today_8:
-        candidates.append(today_8)
-        candidates.append(today_20)
+        candidates.extend([today_8, today_12, today_20])
+    elif now <= today_12:
+        candidates.extend([today_12, today_20, today_8 + timedelta(days=1)])
     elif now <= today_20:
-        candidates.append(today_20)
-        candidates.append(today_8 + timedelta(days=1))
+        candidates.extend([today_20, today_8 + timedelta(days=1), today_12 + timedelta(days=1)])
     else:
-        candidates.append(today_8 + timedelta(days=1))
-        candidates.append(today_20 + timedelta(days=1))
+        candidates.extend([today_8 + timedelta(days=1), today_12 + timedelta(days=1), today_20 + timedelta(days=1)])
 
-    # 필요 개수 초과 시 자른다. 부족하면 다음날 슬롯 추가
+    # 필요 개수만큼 채우기
     while len(candidates) < count:
-        base = candidates[-2] + timedelta(days=1)
-        candidates.extend([base.replace(hour=8), base.replace(hour=20)])
+        base = candidates[-3] + timedelta(days=1)
+        candidates.extend([base.replace(hour=8), base.replace(hour=12), base.replace(hour=20)])
+    
     return candidates[:count]
 
 # ========================================
@@ -384,7 +387,7 @@ def main():
     ig_results = []
 
     # 1) 오늘 기준 예약 슬롯 계산 (08:00, 20:00)
-    slots = next_slots_8am_8pm(count=POSTS_PER_DAY)
+    slots = next_slots_8_12_20(count=POSTS_PER_DAY)
     print(f"\n🕗 예약 슬롯: {[dt.strftime('%Y-%m-%d %H:%M') for dt in slots]} (JST)")
 
     # 2) 워드프레스 글 생성 + 예약발행
