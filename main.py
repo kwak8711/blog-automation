@@ -31,55 +31,67 @@ STORE_URLS = {
 # 이미지 크롤링
 # ========================================
 def crawl_product_images(store_name):
-    """편의점 공식 사이트에서 신상 이미지 크롤링"""
+    """여러 소스에서 신상 이미지 크롤링 (편의점 공식 + 구글 이미지)"""
     try:
-        print(f"  🖼️ {store_name} 공식 사이트 크롤링 중...")
+        print(f"  🖼️ {store_name} 이미지 검색 중...")
         
+        all_images = []
+        
+        # 1. 편의점 공식 사이트
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
         url = STORE_URLS.get(store_name)
-        if not url:
-            print(f"  ⚠️ {store_name} URL 없음")
-            return []
+        if url:
+            try:
+                response = requests.get(url, headers=headers, timeout=15)
+                soup = BeautifulSoup(response.content, 'html.parser')
+                img_tags = soup.find_all('img', limit=10)
+                
+                for img in img_tags:
+                    src = img.get('src') or img.get('data-src')
+                    if src:
+                        if not src.startswith('http'):
+                            if store_name == 'CU':
+                                src = 'https://cu.bgfretail.com' + src
+                            elif store_name == '세븐일레븐':
+                                src = 'https://www.7-eleven.co.kr' + src
+                            elif store_name == 'GS25':
+                                src = 'https://gs25.gsretail.com' + src
+                        
+                        if 'product' in src.lower() or 'item' in src.lower():
+                            all_images.append(src)
+            except:
+                pass
         
-        response = requests.get(url, headers=headers, timeout=15)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # 이미지 URL 찾기 (각 편의점마다 다름)
-        images = []
-        
-        if store_name == 'GS25':
-            # GS25 구조에 맞게 수정 필요
+        # 2. 구글 이미지 검색 (네이버 뉴스 등)
+        try:
+            search_query = f"{store_name} 편의점 신상"
+            google_url = f"https://www.google.com/search?q={search_query}&tbm=isch"
+            response = requests.get(google_url, headers=headers, timeout=10)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
             img_tags = soup.find_all('img', limit=5)
             for img in img_tags:
                 src = img.get('src') or img.get('data-src')
-                if src and 'http' in src:
-                    images.append(src)
+                if src and src.startswith('http') and 'gstatic' not in src:
+                    all_images.append(src)
+        except:
+            pass
         
-        elif store_name == 'CU':
-            # CU 구조
-            img_tags = soup.find_all('img', limit=5)
-            for img in img_tags:
-                src = img.get('src')
-                if src and 'product' in src.lower():
-                    if not src.startswith('http'):
-                        src = 'https://cu.bgfretail.com' + src
-                    images.append(src)
+        # 3. Unsplash 무료 이미지 (백업)
+        try:
+            unsplash_url = "https://source.unsplash.com/800x600/?convenience,store,snack,food"
+            all_images.append(unsplash_url)
+        except:
+            pass
         
-        elif store_name == '세븐일레븐':
-            # 세븐일레븐 구조
-            img_tags = soup.find_all('img', limit=5)
-            for img in img_tags:
-                src = img.get('src')
-                if src and 'product' in src.lower():
-                    if not src.startswith('http'):
-                        src = 'https://www.7-eleven.co.kr' + src
-                    images.append(src)
+        # 중복 제거
+        all_images = list(dict.fromkeys(all_images))
         
-        print(f"  ✅ {len(images)}개 이미지 발견")
-        return images[:3]  # 최대 3개
+        print(f"  ✅ {len(all_images)}개 이미지 발견")
+        return all_images[:5]  # 최대 5개
         
     except Exception as e:
         print(f"  ❌ 크롤링 실패: {e}")
@@ -354,30 +366,82 @@ def send_slack_with_image(message, image_url):
 
 
 def send_instagram_to_slack(caption, hashtags, store, image_urls):
-    """인스타그램 콘텐츠를 슬랙으로 전송 (이미지 포함)"""
+    """인스타그램 콘텐츠를 슬랙으로 전송 (버튼 포함)"""
     try:
-        message = f"""📱 *{store} 인스타그램 콘텐츠 준비 완료*
-
-*캡션:*
-{caption}
-
-*해시태그:*
-{hashtags}
-
-*이미지:* {len(image_urls)}개 발견
-
----
-✅ 승인하려면 아래 이미지 확인 후 스마트폰에서 인스타 앱으로 업로드하세요!
-"""
+        # 이미지 링크 버튼 생성
+        image_buttons = []
+        for idx, url in enumerate(image_urls[:5], 1):
+            image_buttons.append({
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"📷 이미지 {idx} 보기",
+                    "emoji": True
+                },
+                "url": url
+            })
         
-        # 첫 번째 이미지와 함께 전송
+        # 슬랙 메시지 구조
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"📱 {store} 인스타그램 콘텐츠 준비 완료!",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*캡션:*\n{caption}"
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*해시태그:*\n{hashtags}"
+                }
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*제품 이미지:* {len(image_urls)}개 발견\n\n✅ *업로드 방법:*\n1. 아래 버튼을 눌러 이미지 확인\n2. 마음에 드는 이미지 다운로드\n3. 인스타그램 앱에서 업로드!"
+                }
+            }
+        ]
+        
+        # 이미지 버튼 추가
+        if image_buttons:
+            blocks.append({
+                "type": "actions",
+                "elements": image_buttons
+            })
+        
+        # 첫 번째 이미지 미리보기
         if image_urls:
-            return send_slack_with_image(message, image_urls[0])
-        else:
-            return send_slack(message)
+            blocks.append({
+                "type": "image",
+                "image_url": image_urls[0],
+                "alt_text": f"{store} 제품 이미지"
+            })
+        
+        payload = {
+            "blocks": blocks
+        }
+        
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
+        return response.status_code == 200
         
     except Exception as e:
         print(f"  ❌ 슬랙 전송 실패: {e}")
+        traceback.print_exc()
         return False
 
 
