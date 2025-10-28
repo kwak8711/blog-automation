@@ -403,8 +403,10 @@ def generate_mode():
                 blog_contents.append(content)
         
         # Google Sheets에 저장
-        if blog_contents:
-            save_to_sheets(blog_contents)
+        # if blog_contents:
+        #     save_to_sheets(blog_contents)
+        print("⚠️ Google Sheets 저장 스킵됨 (임시)")
+
         
         # 인스타그램 콘텐츠 생성
         print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 중...")
