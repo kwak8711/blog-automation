@@ -1,11 +1,10 @@
 name: Blog Automation
-
 on:
   schedule:
-    # 매일 오전 9시: 콘텐츠 생성
-    - cron: '0 0 * * *'
-    # 매 시간마다: 승인된 글 발행
-    - cron: '0 * * * *'
+    # 매일 오전 8시, 12시, 오후 8시 (KST 기준)
+    - cron: '0 23 * * *'  # JST 08:00 = UTC 23:00 (전날)
+    - cron: '0 3 * * *'   # JST 12:00 = UTC 03:00
+    - cron: '0 11 * * *'  # JST 20:00 = UTC 11:00
   workflow_dispatch:  # 수동 실행 가능
     inputs:
       mode:
