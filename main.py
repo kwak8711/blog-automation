@@ -3,7 +3,6 @@ import json
 import traceback
 import requests
 from datetime import datetime
-from openai import OpenAI
 from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import NewPost
 
@@ -15,9 +14,6 @@ SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
 WORDPRESS_URL = os.environ.get('WORDPRESS_URL')
 WORDPRESS_USERNAME = os.environ.get('WORDPRESS_USERNAME')
 WORDPRESS_PASSWORD = os.environ.get('WORDPRESS_PASSWORD')
-
-# OpenAI 클라이언트 초기화
-client = OpenAI(api_key=OPENAI_API_KEY, timeout=60.0, max_retries=2)
 
 # 설정
 POSTS_PER_DAY = 2  # 워드프레스 글 개수
@@ -54,17 +50,32 @@ JSON 형식으로 답변:
 }}
 """
         
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
+        # OpenAI API 직접 호출
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "gpt-4o-mini",
+            "messages": [
                 {"role": "system", "content": "당신은 편의점 신상 전문 블로거입니다. 매일 새로운 제품을 리뷰하며, 독자들에게 유용한 정보를 제공합니다."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.9,
-            response_format={"type": "json_object"}
+            "temperature": 0.9,
+            "response_format": {"type": "json_object"}
+        }
+        
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
         )
         
-        result = json.loads(response.choices[0].message.content)
+        response.raise_for_status()
+        result = json.loads(response.json()['choices'][0]['message']['content'])
+        
         print(f"  ✅ 블로그 글 생성 완료: {result['title'][:30]}...")
         return result
         
@@ -96,17 +107,32 @@ JSON 형식으로 답변:
 }}
 """
         
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
+        # OpenAI API 직접 호출
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "gpt-4o-mini",
+            "messages": [
                 {"role": "system", "content": "당신은 편의점 신상 전문 인스타그래머입니다. 매일 새로운 제품을 소개하며 팔로워들의 반응이 뜨겁습니다."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.95,
-            response_format={"type": "json_object"}
+            "temperature": 0.95,
+            "response_format": {"type": "json_object"}
+        }
+        
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
         )
         
-        result = json.loads(response.choices[0].message.content)
+        response.raise_for_status()
+        result = json.loads(response.json()['choices'][0]['message']['content'])
+        
         print(f"  ✅ 인스타 캡션 생성 완료")
         return result
         
