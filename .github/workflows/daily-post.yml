@@ -1,10 +1,21 @@
-name: Daily Blog Automation
+name: Blog Automation
 
 on:
   schedule:
-    # 매일 오전 9시 (한국시간 기준, UTC는 0시)
+    # 매일 오전 9시: 콘텐츠 생성
     - cron: '0 0 * * *'
+    # 매 시간마다: 승인된 글 발행
+    - cron: '0 * * * *'
   workflow_dispatch:  # 수동 실행 가능
+    inputs:
+      mode:
+        description: '실행 모드'
+        required: true
+        default: 'generate'
+        type: choice
+        options:
+          - generate
+          - publish
 
 jobs:
   run-automation:
@@ -24,6 +35,19 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: 실행 모드 결정
+      id: set-mode
+      run: |
+        # 수동 실행이면 입력값 사용
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
+        # 스케줄 실행이면 시간으로 판단
+        elif [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then
+          echo "MODE=generate" >> $GITHUB_ENV
+        else
+          echo "MODE=publish" >> $GITHUB_ENV
+        fi
+    
     - name: 자동화 스크립트 실행
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -31,4 +55,7 @@ jobs:
         WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
         WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+        GOOGLE_SHEETS_CREDS: ${{ secrets.GOOGLE_SHEETS_CREDS }}
+        GOOGLE_SHEET_URL: ${{ secrets.GOOGLE_SHEET_URL }}
+        MODE: ${{ env.MODE }}
       run: python main.py
