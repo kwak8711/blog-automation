@@ -16,8 +16,8 @@ WORDPRESS_URL = os.environ.get('WORDPRESS_URL')
 WORDPRESS_USERNAME = os.environ.get('WORDPRESS_USERNAME')
 WORDPRESS_PASSWORD = os.environ.get('WORDPRESS_PASSWORD')
 
-POSTS_PER_DAY = 3
-INSTAGRAM_POSTS_PER_DAY = 3
+POSTS_PER_DAY = 2
+INSTAGRAM_POSTS_PER_DAY = 2
 
 # 편의점 공식 사이트 URL
 STORE_URLS = {
@@ -484,7 +484,7 @@ def main():
                     'url': result['url']
                 })
         
-        time.sleep(3)  # API 제한 방지
+        time.sleep(10)  # API 제한 방지
     
     # ========================================
     # 2단계: 인스타그램 콘텐츠 슬랙 전송 (승인 대기)
@@ -511,7 +511,7 @@ def main():
                     'status': '슬랙 전송 완료 (승인 대기)'
                 })
         
-        time.sleep(3)
+        time.sleep(10)
     
     # ========================================
     # 3단계: 완료 알림
