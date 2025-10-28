@@ -33,10 +33,88 @@ print(f"OPENAI_API_KEY: {'***설정됨***' if OPENAI_API_KEY else '❌없음❌'
 print(f"SLACK_WEBHOOK_URL: {'***설정됨***' if SLACK_WEBHOOK_URL else '❌없음❌'}")
 print("=" * 60)
 # ===== 여기까지 추가 =====
+
+
+import base64
+from io import BytesIO
+from PIL import Image
+
+# ========================================
+# 이미지 크롤링 및 처리
+# ========================================
+def get_convenience_store_images(store_name, product_keywords):
+    """편의점 이미지 검색 (구글 이미지 검색 활용)"""
+    try:
+        print(f"  🖼️ {store_name} 이미지 검색 중...")
+        
+        # 검색어 생성
+        search_query = f"{store_name} 편의점 신상 {product_keywords}"
+        
+        # 구글 이미지 검색 URL (간단 버전)
+        # 실제로는 Unsplash API나 Pexels API 사용 권장
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        # Unsplash API로 무료 이미지 가져오기 (저작권 안전)
+        unsplash_url = f"https://source.unsplash.com/800x600/?convenience,store,food,snack"
+        
+        response = requests.get(unsplash_url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            # 이미지를 base64로 인코딩
+            image = Image.open(BytesIO(response.content))
+            buffered = BytesIO()
+            image.save(buffered, format="JPEG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            
+            print(f"  ✅ 이미지 다운로드 완료")
+            return img_str
+        else:
+            print(f"  ⚠️ 이미지 다운로드 실패")
+            return None
+            
+    except Exception as e:
+        print(f"  ❌ 이미지 처리 실패: {e}")
+        return None
+
+
+def upload_image_to_wordpress(image_base64, filename="convenience_product.jpg"):
+    """워드프레스에 이미지 업로드"""
+    try:
+        from wordpress_xmlrpc.methods import media
+        from wordpress_xmlrpc.compat import xmlrpc_client
+        
+        print(f"  📤 이미지 업로드 중...")
+        
+        wp_url = f"{WORDPRESS_URL}/xmlrpc.php"
+        wp = Client(wp_url, WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
+        
+        # base64를 바이너리로 변환
+        image_data = base64.b64decode(image_base64)
+        
+        # 이미지 업로드
+        data = {
+            'name': filename,
+            'type': 'image/jpeg',
+            'bits': xmlrpc_client.Binary(image_data)
+        }
+        
+        response = wp.call(media.UploadFile(data))
+        image_url = response['url']
+        
+        print(f"  ✅ 이미지 업로드 완료: {image_url}")
+        return image_url
+        
+    except Exception as e:
+        print(f"  ❌ 이미지 업로드 실패: {e}")
+        return None
+
+
 # 1. AI 콘텐츠 생성
 # ========================================
 def generate_blog_post(store_name):
-    """AI로 블로그 글 생성"""
+    """AI로 블로그 글 생성 (이미지 포함)"""
     try:
         print(f"  📝 {store_name} 블로그 글 생성 중...")
         
@@ -53,12 +131,14 @@ def generate_blog_post(store_name):
    - 가격대: 1,500원~5,000원
 5. 각 제품마다 맛 후기, 조합 꿀팁, 별점 포함
 6. SEO 키워드 자연스럽게 포함: 편의점신상, {store_name}, 꿀조합, 편스타그램
+7. product_keywords: 제품명 2-3개를 쉼표로 구분 (예: "케이크,김밥,에이드")
 
 JSON 형식으로 답변:
 {{
   "title": "제목 (이모지 포함)",
   "content": "본문 (HTML 태그 사용: <h2>, <p>, <strong>, <br> 등)",
-  "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"]
+  "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
+  "product_keywords": "제품키워드1,제품키워드2"
 }}
 """
         
@@ -89,6 +169,11 @@ JSON 형식으로 답변:
         result = json.loads(response.json()['choices'][0]['message']['content'])
         
         print(f"  ✅ 블로그 글 생성 완료: {result['title'][:30]}...")
+        
+        # 이미지 가져오기
+        image_base64 = get_convenience_store_images(store_name, result.get('product_keywords', ''))
+        result['image_base64'] = image_base64
+        
         return result
         
     except Exception as e:
@@ -157,10 +242,18 @@ JSON 형식으로 답변:
 # ========================================
 # 2. 워드프레스 발행
 # ========================================
-def publish_to_wordpress(title, content, tags):
-    """워드프레스에 글 발행"""
+def publish_to_wordpress(title, content, tags, image_base64=None):
+    """워드프레스에 글 발행 (이미지 포함)"""
     try:
         print(f"  📤 워드프레스 발행 중: {title[:30]}...")
+        
+        # 이미지 업로드
+        featured_image_id = None
+        if image_base64:
+            image_url = upload_image_to_wordpress(image_base64)
+            if image_url:
+                # 이미지를 본문 맨 위에 추가
+                content = f'<img src="{image_url}" alt="{title}" style="width:100%; height:auto; margin-bottom:20px;" />\n\n{content}'
         
         # 워드프레스 클라이언트 생성
         wp_url = f"{WORDPRESS_URL}/xmlrpc.php"
@@ -187,7 +280,6 @@ def publish_to_wordpress(title, content, tags):
         print(f"  ❌ 워드프레스 발행 실패: {e}")
         traceback.print_exc()
         return {'success': False, 'error': str(e)}
-
 
 # ========================================
 # 3. 슬랙 알림
@@ -265,7 +357,8 @@ def main():
                 result = publish_to_wordpress(
                     blog_content['title'],
                     blog_content['content'],
-                    blog_content['tags']
+                    blog_content['tags'],
+                    blog_content.get('image_base64')
                 )
                 
                 if result['success']:
