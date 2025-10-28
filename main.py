@@ -202,7 +202,7 @@ def upload_image_to_wordpress(image_data):
 # AI 콘텐츠 생성
 # ========================================
 def generate_blog_post(store_name):
-    """AI로 블로그 글 생성"""
+    """AI로 블로그 글 생성 (Gemini 사용)"""
     try:
         print(f"  📝 {store_name} 블로그 글 생성 중...")
         
@@ -220,7 +220,7 @@ def generate_blog_post(store_name):
 5. 각 제품마다 맛 후기, 조합 꿀팁, 별점 포함
 6. SEO 키워드 자연스럽게 포함: 편의점신상, {store_name}, 꿀조합, 편스타그램
 
-JSON 형식으로 답변:
+반드시 아래 JSON 형식으로만 답변하세요:
 {{
   "title": "제목 (이모지 포함)",
   "content": "본문 (HTML 태그 사용: <h2>, <p>, <strong>, <br> 등)",
@@ -228,30 +228,18 @@ JSON 형식으로 답변:
 }}
 """
         
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        response = model.generate_content(prompt)
         
-        data = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "당신은 편의점 신상 전문 블로거입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.9,
-            "response_format": {"type": "json_object"}
-        }
+        # JSON 파싱
+        text = response.text.strip()
         
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=60
-        )
+        # JSON 코드 블록 제거 (```json ... ``` 형식일 경우)
+        if text.startswith('```'):
+            text = text.split('```')[1]
+            if text.startswith('json'):
+                text = text[4:]
         
-        response.raise_for_status()
-        result = json.loads(response.json()['choices'][0]['message']['content'])
+        result = json.loads(text.strip())
         
         # 이미지 다운로드
         image_data = get_free_image()
@@ -271,7 +259,7 @@ JSON 형식으로 답변:
 
 
 def generate_instagram_post(store_name):
-    """AI로 인스타그램 캡션 생성"""
+    """AI로 인스타그램 캡션 생성 (Gemini 사용)"""
     try:
         print(f"  📱 {store_name} 인스타 캡션 생성 중...")
         
@@ -285,37 +273,23 @@ def generate_instagram_post(store_name):
 3. 구체적인 제품 1-2개 언급 (제품명 + 가격)
 4. 해시태그: 15-20개
 
-JSON 형식으로 답변:
+반드시 아래 JSON 형식으로만 답변하세요:
 {{
   "caption": "캡션 내용",
   "hashtags": "#편의점신상 #태그2 ..."
 }}
 """
         
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        response = model.generate_content(prompt)
         
-        data = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "당신은 편의점 신상 전문 인스타그래머입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.95,
-            "response_format": {"type": "json_object"}
-        }
+        # JSON 파싱
+        text = response.text.strip()
+        if text.startswith('```'):
+            text = text.split('```')[1]
+            if text.startswith('json'):
+                text = text[4:]
         
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=60
-        )
-        
-        response.raise_for_status()
-        result = json.loads(response.json()['choices'][0]['message']['content'])
+        result = json.loads(text.strip())
         
         print(f"  ✅ 인스타 캡션 생성 완료")
         return result
