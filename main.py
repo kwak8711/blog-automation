@@ -375,17 +375,6 @@ def send_instagram_to_slack(caption, hashtags, store, image_urls):
 # 메인
 # ========================================
 def main():
-    """
-    메인 실행:
-    - 08:00 / 20:00 예약 슬롯 계산
-    - 블로그 글 생성 → 워드프레스 예약발행 → 구글시트 로깅
-    - 인스타 캡션 생성 → 슬랙 전송
-    - 요약 + 퀵액션(인스타/네이버) 카드 전송
-    - 429/네트워크 오류 자동 재시도(지수 백오프)
-    """
-    import time
-    from datetime import datetime
-
     print("=" * 60)
     print(f"🚀 편의점 신상 자동화 시작: {datetime.now(JST)}")
     print("=" * 60)
@@ -394,280 +383,66 @@ def main():
     wp_results = []
     ig_results = []
 
-    # ---------------------------
-    # 내부 헬퍼: 재시도 래퍼
-    # ---------------------------
-    def _call_with_retry(fn, label, max_attempts=4, backoffs=(3, 8, 20, 40)):
-        """
-        fn: 호출할 람다 또는 함수
-        label: 로그용 라벨
-        max_attempts: 시도 횟수
-        backoffs: 시도 사이 대기(초), 429/5xx에 특히 유용
-        """
-        attempt = 0
-        last_err = None
-        while attempt < max_attempts:
-            attempt += 1
-            try:
-                return fn()
-            except Exception as e:
-                last_err = e
-                # 429나 5xx면 백오프, 그 외도 1~2회는 재시도
-                wait = backoffs[min(attempt - 1, len(backoffs) - 1)]
-                msg = getattr(e, "response", None)
-                code = getattr(msg, "status_code", None)
-                print(f"  ⚠️ {label} 실패 #{attempt}: {e} (status={code}) → {wait}s 대기 후 재시도")
-                time.sleep(wait)
-        print(f"  ❌ {label} 최종 실패: {last_err}")
-        return None
+    # 1) 오늘 기준 예약 슬롯 계산 (08:00, 20:00)
+    slots = next_slots_8am_8pm(count=POSTS_PER_DAY)
+    print(f"\n🕗 예약 슬롯: {[dt.strftime('%Y-%m-%d %H:%M') for dt in slots]} (JST)")
 
-    # ---------------------------
-    # 1) 예약 슬롯 계산 (08:00, 20:00)
-    # ---------------------------
-    try:
-        slots = next_slots_8am_8pm(count=POSTS_PER_DAY)
-    except Exception as e:
-        print("❌ 예약 슬롯 계산 실패:", e)
-        # 슬롯 계산 실패 시 즉시발행로 폴백
-        slots = [None] * POSTS_PER_DAY
-
-    print(f"\n🕗 예약 슬롯: {[(dt.strftime('%Y-%m-%d %H:%M') if dt else '즉시발행') for dt in slots]} (JST)")
-    print("\n📝 워드프레스 블로그 생성 및 예약발행 중…")
+    # 2) 워드프레스 글 생성 + 예약발행
+    print(f"\n📝 워드프레스 블로그 {POSTS_PER_DAY}개 *예약발행* 설정 중...")
     print("-" * 60)
-
-    # ---------------------------
-    # 2) 블로그 생성 → 예약발행 → 시트 로깅
-    # ---------------------------
     for i in range(POSTS_PER_DAY):
         store = stores[i % len(stores)]
-        scheduled_at = slots[i] if i < len(slots) else None
-        print(f"\n[{i+1}/{POSTS_PER_DAY}] {store} @ {(scheduled_at.strftime('%Y-%m-%d %H:%M') if scheduled_at else '즉시발행')}")
+        scheduled_at = slots[i]
+        print(f"\n[{i+1}/{POSTS_PER_DAY}] {store} @ {scheduled_at.strftime('%Y-%m-%d %H:%M')}")
 
-        # (A) 글 생성 (OpenAI) — 재시도 포함
-        print(f"📝 {store} 블로그 글 생성 중…")
-        content = _call_with_retry(lambda: generate_blog_post(store), label=f"generate_blog_post({store})")
-        if not content:
-            print("  ❌ 생성 실패 → 이 항목 건너뜀")
-            continue
-
-        # (B) 워드프레스 발행/예약 — 재시도 포함
-        def _publish():
-            return publish_to_wordpress(
+        content = generate_blog_post(store)
+        if content:
+            result = publish_to_wordpress(
                 content['title'],
                 content['content'],
                 content['tags'],
                 content.get('featured_image', ''),
-                scheduled_dt_jst=scheduled_at  # None이면 즉시 발행
+                scheduled_dt_jst=scheduled_at
             )
-        result = _call_with_retry(_publish, label="publish_to_wordpress")
-        if result and result.get('success'):
-            # 결과 적재
-            wp_item = {
-                'store': store,
-                'title': content['title'],
-                'url': result['url'],
-                'post_id': result.get('post_id'),
-                'when': scheduled_at.strftime('%Y-%m-%d %H:%M') if scheduled_at else ''
-            }
-            wp_results.append(wp_item)
+            if result.get('success'):
+                wp_results.append({
+                    'store': store,
+                    'title': content['title'],
+                    'url': result['url'],
+                    'when': scheduled_at.strftime('%Y-%m-%d %H:%M')
+                })
+        time.sleep(5)
 
-            # (C) 구글시트 로깅 (예약/즉시 구분)
-            try:
-                log_wp_post_to_sheet(
-                    post_id=wp_item['post_id'],
-                    status='future' if scheduled_at else 'publish',
-                    title=content['title'],
-                    store=store,
-                    scheduled_at=scheduled_at.strftime('%Y-%m-%d %H:%M') if scheduled_at else '',
-                    published_at='' if scheduled_at else datetime.now(JST).strftime('%Y-%m-%d %H:%M'),
-                    url=wp_item['url'],
-                    featured_image=content.get('featured_image', ''),
-                    tags=content.get('tags', [])
-                )
-            except Exception as e:
-                print("  ⚠️ 시트 로깅 실패(계속 진행):", e)
-        else:
-            print("  ❌ 발행 실패 → 이 항목 건너뜀")
-
-        # API 레이트 방지
-        time.sleep(3)
-
-    # ---------------------------
-    # 3) 인스타 캡션 생성 → 슬랙 전송
-    # ---------------------------
-    print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 및 슬랙 전송 중…")
+    # 3) 인스타그램 콘텐츠 슬랙 전송 (승인 대기)
+    print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 및 슬랙 전송 중...")
     print("-" * 60)
     for i in range(INSTAGRAM_POSTS_PER_DAY):
         store = stores[i % len(stores)]
         print(f"\n[{i+1}/{INSTAGRAM_POSTS_PER_DAY}] {store}")
-
-        ig_content = _call_with_retry(lambda: generate_instagram_post(store), label=f"generate_instagram_post({store})")
-        if not ig_content:
-            print("  ❌ 인스타 생성 실패 → 건너뜀")
-            continue
-
-        ok = _call_with_retry(
-            lambda: send_instagram_to_slack(
-                ig_content.get('caption', ''),
-                ig_content.get('hashtags', ''),
+        content = generate_instagram_post(store)
+        if content:
+            if send_instagram_to_slack(
+                content.get('caption', ''),
+                content.get('hashtags', ''),
                 store,
-                ig_content.get('image_urls', [])
-            ),
-            label="send_instagram_to_slack"
-        )
-        if ok:
-            ig_results.append({'store': store, 'status': '슬랙 전송 완료 (승인 대기)'})
-        else:
-            print("  ⚠️ 슬랙 전송 실패(계속 진행)")
+                content.get('image_urls', [])
+            ):
+                ig_results.append({'store': store, 'status': '슬랙 전송 완료 (승인 대기)'})
+        time.sleep(3)
 
-        time.sleep(2)
-
-    # ---------------------------
     # 4) 요약 + 퀵액션 버튼
-    # ---------------------------
-    try:
-        send_summary_with_buttons(wp_results, ig_results)
-    except Exception as e:
-        print("⚠️ 요약 카드 전송 실패:", e)
+    summary = f"🎉 *자동화 완료!*\n\n📝 *워드프레스 예약발행:* {len(wp_results)}개"
+    for r in wp_results:
+        summary += f"\n   • {r['store']}: {r['title'][:30]}... ⏰ {r['when']}\n     → {r['url']}"
+    summary += f"\n\n📱 *인스타그램 준비:* {len(ig_results)}개 (슬랙에서 확인 후 수동 업로드)"
+    for r in ig_results:
+        summary += f"\n   • {r['store']}: {r['status']}"
+    summary += f"\n\n⏰ 완료 시간: {datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S')}"
 
-    try:
-        send_slack_quick_actions(title="업로드 채널 바로가기 ✨")
-    except Exception as e:
-        print("⚠️ 퀵액션 전송 실패:", e)
-
-    # 콘솔 요약 출력
-    summary = f"\n🎉 작업 요약\n- 워드프레스: {len(wp_results)}건\n- 인스타 준비: {len(ig_results)}건\n⏰ 완료: {datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S')}"
+    send_slack(summary)
+    send_slack_quick_actions(title="업로드 채널 바로가기 ✨")
+    print(f"\n✅ 전체 작업 완료!")
     print(summary)
 
-    # =========================
-# Google Sheets 로깅 유틸
-# =========================
-import gspread
-from google.oauth2.service_account import Credentials
-
-GOOGLE_SHEETS_ID = os.environ.get('GOOGLE_SHEETS_ID')
-GOOGLE_SA_JSON   = os.environ.get('GOOGLE_SA_JSON')  # 서비스계정 JSON 파일 경로
-
-SHEET_NAME = 'WP_POSTS'  # 시트 탭 이름
-
-def _get_sheets_client():
-    if not (GOOGLE_SHEETS_ID and GOOGLE_SA_JSON):
-        raise RuntimeError('환경변수 GOOGLE_SHEETS_ID 또는 GOOGLE_SA_JSON 미설정')
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = Credentials.from_service_account_file(GOOGLE_SA_JSON, scopes=scopes)
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_key(GOOGLE_SHEETS_ID)
-    try:
-        ws = sh.worksheet(SHEET_NAME)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sh.add_worksheet(title=SHEET_NAME, rows=1000, cols=20)
-        ws.append_row([
-            "logged_at(JST)","post_id","status","title","store","scheduled_at(JST)",
-            "published_at(JST)","url","featured_image","tags_csv"
-        ])
-    return ws
-
-def log_wp_post_to_sheet(post_id:int, status:str, title:str, store:str, 
-                         scheduled_at:str, published_at:str, url:str, featured_image:str, tags:list):
-    """
-    status: publish | future
-    scheduled_at/published_at: 'YYYY-MM-DD HH:MM' 또는 '' 
-    """
-    try:
-        ws = _get_sheets_client()
-        ws.append_row([
-            datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S'),
-            str(post_id),
-            status,
-            title,
-            store or '',
-            scheduled_at or '',
-            published_at or '',
-            url or '',
-            featured_image or '',
-            ",".join(tags or [])
-        ])
-        print("  ✅ 구글시트 로깅 완료")
-    except Exception as e:
-        print("  ❌ 구글시트 로깅 실패:", e)
-
-# =========================
-# 과거 글 백필(전체 동기화)
-# - WordPress REST API 사용
-# =========================
-from urllib.parse import urljoin
-import math
-import base64
-
-def _wp_rest_get(path, page=1, per_page=100):
-    """
-    WordPress Application Password(또는 기본 비번)로 Basic Auth 권장
-    - WORDPRESS_USERNAME, WORDPRESS_PASSWORD 사용
-    """
-    api_base = urljoin(WORDPRESS_URL if WORDPRESS_URL.endswith('/') else WORDPRESS_URL+'/', 'wp-json/wp/v2/')
-    url = f"{api_base}{path}?per_page={per_page}&page={page}"
-    auth = (WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
-    r = requests.get(url, auth=auth, timeout=20)
-    if r.status_code == 200:
-        total = int(r.headers.get('X-WP-Total', '0') or 0)
-        total_pages = int(r.headers.get('X-WP-TotalPages', '1') or 1)
-        return r.json(), total, total_pages
-    else:
-        raise RuntimeError(f"REST 호출 실패 {r.status_code}: {r.text}")
-
-def sync_all_wp_posts_to_sheet():
-    """
-    게시글 전체를 시트에 백필(중복 허용; 필요시 시트에서 post_id로 중복 제거)
-    - 상태: publish/future/draft 등도 가져옴(필요시 상태 필터링 가능)
-    """
-    try:
-        ws = _get_sheets_client()
-        # 헤더가 없으면 생성 (안전장치)
-        if ws.cell(1,1).value != "logged_at(JST)":
-            ws.update('A1', [[
-                "logged_at(JST)","post_id","status","title","store","scheduled_at(JST)",
-                "published_at(JST)","url","featured_image","tags_csv"
-            ]])
-        page = 1
-        per_page = 100
-        while True:
-            posts, total, total_pages = _wp_rest_get('posts', page=page, per_page=per_page)
-            if not posts:
-                break
-            rows = []
-            for p in posts:
-                post_id = p.get('id')
-                status  = p.get('status')  # 'publish'/'future'/'draft'
-                title   = (p.get('title') or {}).get('rendered','').strip()
-                link    = p.get('link','')
-                # 날짜
-                date_local = (p.get('date') or '')[:16].replace('T',' ')     # 워드프레스 로컬
-                date_gmt   = (p.get('date_gmt') or '')[:16].replace('T',' ')
-                scheduled_at = date_local if status == 'future' else ''
-                published_at = date_local if status == 'publish' else ''
-                # 대표 이미지
-                feat = ''
-                if p.get('featured_media'):
-                    # 미디어 상세까지 내려면 /media/{id} 추가 호출 필요하지만, 간단히 링크 칼럼만
-                    feat = str(p.get('featured_media'))
-                # 태그 CSV
-                tags_csv = ''
-                tag_ids = p.get('tags') or []
-                if tag_ids:
-                    # 간단히 ID 리스트만 CSV로; 이름이 필요하면 /tags?include=... 추가 호출
-                    tags_csv = ",".join(map(str, tag_ids))
-                rows.append([
-                    datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S'),
-                    str(post_id), status, title, "",  # store는 알 수 없으니 공란
-                    scheduled_at, published_at, link, feat, tags_csv
-                ])
-            if rows:
-                ws.append_rows(rows, value_input_option='USER_ENTERED')
-                print(f"  ✅ {page}/{total_pages} 페이지 기록 완료 ({len(rows)}건)")
-            if page >= total_pages:
-                break
-            page += 1
-        print("🎉 과거 글 백필 완료!")
-    except Exception as e:
-        print("❌ 백필 실패:", e)
-
+if __name__ == "__main__":
+    main()
