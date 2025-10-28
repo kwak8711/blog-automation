@@ -3,3 +3,5 @@ beautifulsoup4==4.12.2
 openai==1.54.0
 python-wordpress-xmlrpc==2.3
 lxml==5.1.0
+selenium==4.15.0
+pillow==10.1.0
