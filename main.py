@@ -21,9 +21,7 @@ INSTAGRAM_POSTS_PER_DAY = 2  # 인스타 콘텐츠 개수
 
 
 # ========================================
-# 설정
-POSTS_PER_DAY = 2  # 워드프레스 글 개수
-INSTAGRAM_POSTS_PER_DAY = 2  # 인스타 콘텐츠 개수
+
 
 # ===== 여기부터 추가 =====
 print("=" * 60)
