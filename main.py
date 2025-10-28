@@ -310,11 +310,11 @@ def send_slack_quick_actions(title="오늘의 업로드 바로가기 ✨"):
                         "type": "mrkdwn",
                         "text": f"*{title}*\n\n가고 싶은 채널을 선택해 주세요 💖"
                     },
-                    "accessory": {
-                        "type": "image",
-                        "image_url": "https://i.imgur.com/2q8hZ6T.png",
-                        "alt_text": "Couchmallow"
-                    }
+                    # "accessory": {
+                    #     "type": "image",
+                    #     "image_url": "https://i.imgur.com/2q8hZ6T.png",
+                    #     "alt_text": "Couchmallow"
+                    # }
                 },
                 {
                     "type": "actions",
