@@ -21,6 +21,20 @@ INSTAGRAM_POSTS_PER_DAY = 2  # 인스타 콘텐츠 개수
 
 
 # ========================================
+# 설정
+POSTS_PER_DAY = 2  # 워드프레스 글 개수
+INSTAGRAM_POSTS_PER_DAY = 2  # 인스타 콘텐츠 개수
+
+# ===== 여기부터 추가 =====
+print("=" * 60)
+print("🔍 설정값 확인 중...")
+print(f"WORDPRESS_URL: {WORDPRESS_URL}")
+print(f"WORDPRESS_USERNAME: {WORDPRESS_USERNAME}")
+print(f"WORDPRESS_PASSWORD: {'***설정됨***' if WORDPRESS_PASSWORD else '❌없음❌'}")
+print(f"OPENAI_API_KEY: {'***설정됨***' if OPENAI_API_KEY else '❌없음❌'}")
+print(f"SLACK_WEBHOOK_URL: {'***설정됨***' if SLACK_WEBHOOK_URL else '❌없음❌'}")
+print("=" * 60)
+# ===== 여기까지 추가 =====
 # 1. AI 콘텐츠 생성
 # ========================================
 def generate_blog_post(store_name):
