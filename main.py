@@ -25,8 +25,7 @@ GOOGLE_SHEET_URL = os.environ.get('GOOGLE_SHEET_URL')
 
 # Gemini 설정
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
+model = genai.GenerativeModel('models/gemini-pro')  # models/ 추가
 POSTS_PER_DAY = 3
 INSTAGRAM_POSTS_PER_DAY = 3
 
