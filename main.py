@@ -214,7 +214,7 @@ def main():
         
         content = generate_instagram_post(store)
         if content:
-            if send_instagram_to_slack(content['caption'], content['hashtags'], store):
+            if send_instagram_to_slack(content.get('caption', ''), content.get('hashtags', ''), store):
                 ig_success += 1
     
     # 완료
