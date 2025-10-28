@@ -17,7 +17,7 @@ WORDPRESS_USERNAME = os.environ.get('WORDPRESS_USERNAME')
 WORDPRESS_PASSWORD = os.environ.get('WORDPRESS_PASSWORD')
 
 # OpenAI 클라이언트 초기화
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY, timeout=60.0, max_retries=2)
 
 # 설정
 POSTS_PER_DAY = 2  # 워드프레스 글 개수
