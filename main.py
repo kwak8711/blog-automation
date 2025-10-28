@@ -10,11 +10,12 @@ from wordpress_xmlrpc.methods.posts import NewPost
 import base64
 from io import BytesIO
 from PIL import Image
+import google.generativeai as genai
 
 # ========================================
 # 설정값
 # ========================================
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
 WORDPRESS_URL = os.environ.get('WORDPRESS_URL')
 WORDPRESS_USERNAME = os.environ.get('WORDPRESS_USERNAME')
@@ -22,10 +23,14 @@ WORDPRESS_PASSWORD = os.environ.get('WORDPRESS_PASSWORD')
 GOOGLE_SHEETS_CREDS = os.environ.get('GOOGLE_SHEETS_CREDS')
 GOOGLE_SHEET_URL = os.environ.get('GOOGLE_SHEET_URL')
 
+# Gemini 설정
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
+
 POSTS_PER_DAY = 3
 INSTAGRAM_POSTS_PER_DAY = 3
 
-MODE = os.environ.get('MODE', 'generate')  # 'generate' 또는 'publish'
+MODE = os.environ.get('MODE', 'generate')
 
 
 # ========================================
