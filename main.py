@@ -279,26 +279,42 @@ JSON 형식으로 답변:
         result = json.loads(response.json()['choices'][0]['message']['content'])
 
         # Pexels 이미지 검색 (제목/본문 기반)
+        print(f"  🔍 이미지 검색 시작...")
         image_urls = get_product_images_smart(
             store_name, 
             result.get('title', ''),
             result.get('content', '')
         )
         result['crawled_images'] = image_urls
+        
+        print(f"  📸 발견된 이미지: {len(image_urls)}개")
 
         # 첫 번째 이미지 다운로드 & 업로드
         if image_urls:
+            print(f"  ⬇️ 첫 번째 이미지 다운로드 중: {image_urls[0][:50]}...")
             img_data = download_image(image_urls[0])
+            
             if img_data:
+                print(f"  ✅ 다운로드 성공 ({len(img_data)} bytes)")
+                print(f"  ⬆️ 워드프레스 업로드 중...")
+                
                 img_url = upload_image_to_wordpress(
                     img_data, 
-                    f'{store_name}_{datetime.now(KST).strftime("%Y%m%d")}.jpg'
+                    f'{store_name}_{datetime.now(KST).strftime("%Y%m%d%H%M%S")}.jpg'
                 )
-                result['featured_image'] = img_url or ''
+                
+                if img_url:
+                    result['featured_image'] = img_url
+                    print(f"  ✅ 이미지 업로드 성공: {img_url}")
+                else:
+                    result['featured_image'] = ''
+                    print(f"  ❌ 워드프레스 업로드 실패")
             else:
                 result['featured_image'] = ''
+                print(f"  ❌ 이미지 다운로드 실패")
         else:
             result['featured_image'] = ''
+            print(f"  ❌ 검색된 이미지 없음")
 
         print(f"  ✅ 생성 완료: {result['title'][:30]}...")
         return result
@@ -354,12 +370,19 @@ def publish_to_wordpress(title, content, tags, image_url='', scheduled_dt_kst=No
     """워드프레스 발행/예약발행"""
     try:
         print(f"  📤 발행 준비: {title[:30]}...")
-
+        
+        # 이미지가 있으면 본문 맨 위에 큰 이미지 삽입
         if image_url:
-            content = (
-                f'<img src="{image_url}" alt="{title}" '
-                f'style="width:100%; height:auto; margin-bottom:30px; border-radius:10px;"/><br>{content}'
-            )
+            print(f"  🖼️ 이미지 삽입: {image_url}")
+            image_html = f'''
+<div style="margin-bottom: 40px; text-align: center;">
+    <img src="{image_url}" alt="{title}" 
+         style="width: 100%; max-width: 800px; height: auto; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"/>
+</div>
+'''
+            content = image_html + content
+        else:
+            print(f"  ⚠️ 이미지 URL 없음 - 이미지 없이 발행")
 
         wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
 
@@ -548,6 +571,28 @@ def generate_and_schedule():
     summary += f"\n📸 Pexels API로 고품질 이미지 자동 검색 완료!"
     
     send_slack(summary)
+    
+    # 인스타그램 콘텐츠도 미리 생성 (선택사항)
+    print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 중...")
+    print("-" * 60)
+    
+    for i in range(INSTAGRAM_POSTS_PER_DAY):
+        store = stores[i % len(stores)]
+        print(f"\n[{i+1}/{INSTAGRAM_POSTS_PER_DAY}] {store} 인스타")
+        
+        content = generate_instagram_post(store)
+        if content:
+            send_instagram_to_slack(
+                content.get('caption', ''),
+                content.get('hashtags', ''),
+                store,
+                content.get('image_urls', [])
+            )
+        time.sleep(5)
+    
+    # 퀵액션 버튼
+    send_slack_quick_actions(title="업로드 채널 바로가기 ✨")
+    
     print(f"\n✅ 예약발행 완료!")
 
 
