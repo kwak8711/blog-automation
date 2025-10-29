@@ -33,17 +33,17 @@ STORE_URLS = {
     '세븐일레븐': 'https://www.7-eleven.co.kr/product/presentList.asp'
 }
 
-JST = ZoneInfo('Asia/Tokyo')
+KST = ZoneInfo('Asia/Seoul')  
 
 # ========================================
 # 예약 슬롯 계산: 오늘/내일 08:00, 20:00
 # ========================================
 def next_slots_8_12_20(count=3):
     """
-    지금 시각 기준으로 가장 가까운 08:00, 12:00, 20:00부터 순서대로 count개 반환 (JST)
-    반환: [datetime(JST), ...]
+    지금 시각 기준으로 가장 가까운 08:00, 12:00, 20:00부터 순서대로 count개 반환 (KST)
+    반환: [datetime(KST), ...]
     """
-    now = datetime.now(JST)
+    now = datetime.now(KST)
     today_8 = now.replace(hour=8,  minute=0, second=0, microsecond=0)
     today_12 = now.replace(hour=12, minute=0, second=0, microsecond=0)
     today_20 = now.replace(hour=20, minute=0, second=0, microsecond=0)
@@ -187,7 +187,7 @@ JSON 형식으로 답변:
         if image_urls:
             img_data = download_image(image_urls[0])
             if img_data:
-                img_url = upload_image_to_wordpress(img_data, f'{store_name}_{datetime.now(JST).strftime("%Y%m%d")}.jpg')
+                img_url = upload_image_to_wordpress(img_data, f'{store_name}_{datetime.now(KST).strftime("%Y%m%d")}.jpg')
                 result['featured_image'] = img_url or ''
             else:
                 result['featured_image'] = ''
@@ -229,9 +229,9 @@ JSON 형식: {{"caption": "캡션 내용", "hashtags": "#편의점신상 #태그
 # ========================================
 # 워드프레스 발행 (예약 발행 지원)
 # ========================================
-def publish_to_wordpress(title, content, tags, image_url='', scheduled_dt_jst=None):
+def publish_to_wordpress(title, content, tags, image_url='', scheduled_dt_KST=None):
     """워드프레스 발행/예약발행
-       - scheduled_dt_jst: Asia/Tokyo 기준 예약 시각 (datetime, tz-aware) 주면 예약 발행
+       - scheduled_dt_KST: Asia/Tokyo 기준 예약 시각 (datetime, tz-aware) 주면 예약 발행
     """
     try:
         print(f"  📤 발행 준비: {title[:30]}...")
@@ -249,12 +249,12 @@ def publish_to_wordpress(title, content, tags, image_url='', scheduled_dt_jst=No
         post.content = content
         post.terms_names = {'post_tag': tags, 'category': ['편의점']}
 
-        if scheduled_dt_jst:
+        if scheduled_dt_KST:
             # WordPress는 로컬(post.date)과 GMT(post.date_gmt) 모두 세팅하면 안전
-            dt_jst = scheduled_dt_jst.astimezone(JST)
-            dt_utc = dt_jst.astimezone(timezone.utc)
+            dt_KST = scheduled_dt_KST.astimezone(KST)
+            dt_utc = dt_KST.astimezone(timezone.utc)
             post.post_status = 'future'
-            post.date = dt_jst.replace(tzinfo=None)      # 라이브러리 특성상 naive로 전달
+            post.date = dt_KST.replace(tzinfo=None)      # 라이브러리 특성상 naive로 전달
             post.date_gmt = dt_utc.replace(tzinfo=None)  # GMT도 명시
             action = '예약발행'
         else:
@@ -379,7 +379,7 @@ def send_instagram_to_slack(caption, hashtags, store, image_urls):
 # ========================================
 def main():
     print("=" * 60)
-    print(f"🚀 편의점 신상 자동화 시작: {datetime.now(JST)}")
+    print(f"🚀 편의점 신상 자동화 시작: {datetime.now(KST)}")
     print("=" * 60)
 
     stores = ['GS25', 'CU', '세븐일레븐']
@@ -388,7 +388,7 @@ def main():
 
     # 1) 오늘 기준 예약 슬롯 계산 (08:00, 20:00)
     slots = next_slots_8_12_20(count=POSTS_PER_DAY)
-    print(f"\n🕗 예약 슬롯: {[dt.strftime('%Y-%m-%d %H:%M') for dt in slots]} (JST)")
+    print(f"\n🕗 예약 슬롯: {[dt.strftime('%Y-%m-%d %H:%M') for dt in slots]} (KST)")
 
     # 2) 워드프레스 글 생성 + 예약발행
     print(f"\n📝 워드프레스 블로그 {POSTS_PER_DAY}개 *예약발행* 설정 중...")
@@ -405,7 +405,7 @@ def main():
                 content['content'],
                 content['tags'],
                 content.get('featured_image', ''),
-                scheduled_dt_jst=scheduled_at
+                scheduled_dt_KST=scheduled_at
             )
             if result.get('success'):
                 wp_results.append({
@@ -440,7 +440,7 @@ def main():
     summary += f"\n\n📱 *인스타그램 준비:* {len(ig_results)}개 (슬랙에서 확인 후 수동 업로드)"
     for r in ig_results:
         summary += f"\n   • {r['store']}: {r['status']}"
-    summary += f"\n\n⏰ 완료 시간: {datetime.now(JST).strftime('%Y-%m-%d %H:%M:%S')}"
+    summary += f"\n\n⏰ 완료 시간: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}"
 
     send_slack(summary)
     send_slack_quick_actions(title="업로드 채널 바로가기 ✨")
