@@ -119,7 +119,7 @@ def extract_product_category(title, content):
 def search_pexels_images(keyword, count=3):
     """Pexels API로 이미지 검색"""
     if not PEXELS_API_KEY:
-        print("  ⚠️ PEXELS_API_KEY 없음, Unsplash로 폴백")
+        print("  ⚠️ PEXELS_API_KEY 없음")
         return []
     
     try:
@@ -133,15 +133,27 @@ def search_pexels_images(keyword, count=3):
             "orientation": "landscape"  # 가로 이미지
         }
         
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
         
         photos = response.json().get('photos', [])
+        
+        if not photos:
+            print(f"  ⚠️ '{keyword}' 검색 결과 없음")
+            return []
+        
         image_urls = [photo['src']['large'] for photo in photos]
         
         print(f"  ✅ {len(image_urls)}개 이미지 발견")
         return image_urls
         
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 401:
+            print(f"  ❌ Pexels API 키가 유효하지 않습니다!")
+            print(f"  📌 https://www.pexels.com/api/ 에서 키를 재발급하세요")
+        else:
+            print(f"  ❌ Pexels HTTP 에러: {e}")
+        return []
     except Exception as e:
         print(f"  ❌ Pexels 검색 실패: {e}")
         return []
@@ -149,41 +161,57 @@ def search_pexels_images(keyword, count=3):
 
 def get_product_images_smart(store_name, title='', content=''):
     """
-    스마트 이미지 검색 (Pexels + 폴백)
+    스마트 이미지 검색 (Pexels 전용)
     1순위: Pexels API (제품 카테고리 기반)
     2순위: Pexels 일반 검색 (편의점)
-    3순위: Unsplash 백업
+    3순위: Pexels 광범위 검색 (food)
     """
     all_images = []
+    
+    if not PEXELS_API_KEY:
+        print("  ❌ PEXELS_API_KEY가 설정되지 않았습니다!")
+        print("  📌 GitHub Secrets에 PEXELS_API_KEY를 추가하세요")
+        return []
     
     # 1) Pexels - 제품 카테고리 검색
     if title or content:
         category_keyword = extract_product_category(title, content)
-        images = search_pexels_images(category_keyword, count=3)
+        print(f"  🎯 카테고리 검색: {category_keyword}")
+        images = search_pexels_images(category_keyword, count=5)
         all_images.extend(images)
     
     # 2) Pexels - 편의점 일반 검색
     if len(all_images) < 3:
+        print(f"  🔄 일반 검색으로 전환...")
         general_keywords = [
             "convenience store food",
-            "korean snacks food",
-            f"{store_name} food"
+            "korean food snacks",
+            "asian food meal",
+            "food photography"
         ]
         for kw in general_keywords:
-            images = search_pexels_images(kw, count=2)
+            images = search_pexels_images(kw, count=3)
             all_images.extend(images)
             if len(all_images) >= 3:
                 break
     
-    # 3) Unsplash 백업
-    if len(all_images) == 0:
-        print("  ⚠️ Pexels 결과 없음, Unsplash 사용")
-        all_images.append("https://source.unsplash.com/800x600/?convenience,store,food")
-        all_images.append("https://source.unsplash.com/800x600/?korean,food,snack")
-        all_images.append("https://source.unsplash.com/800x600/?asian,food,meal")
+    # 3) Pexels - 광범위 검색 (최후)
+    if len(all_images) < 3:
+        print(f"  🔄 광범위 검색...")
+        fallback_keywords = ["food", "snack", "meal", "delicious food"]
+        for kw in fallback_keywords:
+            images = search_pexels_images(kw, count=5)
+            all_images.extend(images)
+            if len(all_images) >= 3:
+                break
     
     # 중복 제거
     all_images = list(dict.fromkeys(all_images))
+    
+    if len(all_images) == 0:
+        print(f"  ❌ Pexels에서 이미지를 찾지 못했습니다")
+        print(f"  📌 PEXELS_API_KEY를 확인하거나 네트워크 상태를 확인하세요")
+        return []
     
     print(f"  ✅ 최종 {len(all_images)}개 이미지 선택")
     return all_images[:5]
@@ -444,7 +472,7 @@ def send_slack_with_image(message, image_url):
 
 
 def send_slack_quick_actions(title="업로드 채널 바로가기 ✨"):
-    """예쁜 버튼 2개 (인스타 / 네이버블로그)"""
+    """예쁜 버튼 3개 (워드프레스 / 인스타 / 네이버블로그)"""
     try:
         payload = {
             "text": title,
@@ -461,13 +489,18 @@ def send_slack_quick_actions(title="업로드 채널 바로가기 ✨"):
                     "elements": [
                         {
                             "type": "button",
-                            "text": {"type": "plain_text", "text": "📷 인스타로 가기", "emoji": True},
+                            "text": {"type": "plain_text", "text": "📝 워드프레스", "emoji": True},
                             "style": "primary",
+                            "url": f"{WORDPRESS_URL}/wp-admin/edit.php"
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "📷 인스타", "emoji": True},
                             "url": INSTAGRAM_PROFILE_URL
                         },
                         {
                             "type": "button",
-                            "text": {"type": "plain_text", "text": "✍️ 네이버블로그로 가기", "emoji": True},
+                            "text": {"type": "plain_text", "text": "✍️ 네이버", "emoji": True},
                             "style": "danger",
                             "url": NAVER_BLOG_URL
                         }
