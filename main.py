@@ -6,8 +6,6 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import NewPost
-from wordpress_xmlrpc.compat import xmlrpc_client
-from bs4 import BeautifulSoup
 import time
 
 # =========================
@@ -18,46 +16,14 @@ SLACK_WEBHOOK_URL    = os.environ.get('SLACK_WEBHOOK_URL')
 WORDPRESS_URL        = os.environ.get('WORDPRESS_URL')
 WORDPRESS_USERNAME   = os.environ.get('WORDPRESS_USERNAME')
 WORDPRESS_PASSWORD   = os.environ.get('WORDPRESS_PASSWORD')
-PEXELS_API_KEY       = os.environ.get('PEXELS_API_KEY')  # 추가!
 
 # 버튼 링크용
 INSTAGRAM_PROFILE_URL = os.environ.get('INSTAGRAM_PROFILE_URL', 'https://instagram.com/')
 NAVER_BLOG_URL        = os.environ.get('NAVER_BLOG_URL', 'https://blog.naver.com/')
 
 POSTS_PER_DAY = 3
-INSTAGRAM_POSTS_PER_DAY = 3
-
-# 편의점 공식 사이트 URL
-STORE_URLS = {
-    'GS25': 'https://gs25.gsretail.com/gscvs/ko/products/youus-freshfood',
-    'CU': 'https://cu.bgfretail.com/product/product.do?category=product&depth=1&sf=N',
-    '세븐일레븐': 'https://www.7-eleven.co.kr/product/presentList.asp'
-}
 
 KST = ZoneInfo('Asia/Seoul')
-
-# 제품 카테고리별 최적 검색어 (Pexels용)
-PRODUCT_KEYWORDS = {
-    '라면': 'ramen noodles instant',
-    '김밥': 'kimbap rice roll sushi',
-    '도시락': 'korean lunch box bento',
-    '샌드위치': 'sandwich deli',
-    '삼각김밥': 'onigiri rice ball',
-    '케이크': 'cake dessert pastry',
-    '과자': 'snacks chips crackers',
-    '음료': 'beverage drink juice',
-    '아이스크림': 'ice cream dessert',
-    '치킨': 'fried chicken',
-    '핫도그': 'hot dog sausage',
-    '피자': 'pizza slice',
-    '떡볶이': 'tteokbokki korean food',
-    '만두': 'dumplings gyoza',
-    '우유': 'milk dairy drink',
-    '커피': 'coffee beverage',
-    '초콜릿': 'chocolate candy',
-    '빵': 'bread pastry',
-    '주스': 'juice beverage',
-}
 
 # ========================================
 # 예약 슬롯 계산: 다음날 08:00, 12:00, 20:00
@@ -101,152 +67,10 @@ def next_slots_8_12_20(count=3):
     return candidates[:count]
 
 # ========================================
-# Pexels 이미지 검색
-# ========================================
-def extract_product_category(title, content):
-    """제목과 본문에서 제품 카테고리 추출"""
-    text = (title + ' ' + content).lower()
-    
-    # 키워드 매칭
-    for category, keyword in PRODUCT_KEYWORDS.items():
-        if category in text:
-            return keyword
-    
-    # 기본값
-    return 'convenience store food snacks'
-
-
-def search_pexels_images(keyword, count=3):
-    """Pexels API로 이미지 검색"""
-    if not PEXELS_API_KEY:
-        print("  ⚠️ PEXELS_API_KEY 없음")
-        return []
-    
-    try:
-        print(f"  🔍 Pexels 검색: '{keyword}'")
-        
-        headers = {"Authorization": PEXELS_API_KEY}
-        url = "https://api.pexels.com/v1/search"
-        params = {
-            "query": keyword,
-            "per_page": count,
-            "orientation": "landscape"  # 가로 이미지
-        }
-        
-        response = requests.get(url, headers=headers, params=params, timeout=15)
-        response.raise_for_status()
-        
-        photos = response.json().get('photos', [])
-        
-        if not photos:
-            print(f"  ⚠️ '{keyword}' 검색 결과 없음")
-            return []
-        
-        image_urls = [photo['src']['large'] for photo in photos]
-        
-        print(f"  ✅ {len(image_urls)}개 이미지 발견")
-        return image_urls
-        
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 401:
-            print(f"  ❌ Pexels API 키가 유효하지 않습니다!")
-            print(f"  📌 https://www.pexels.com/api/ 에서 키를 재발급하세요")
-        else:
-            print(f"  ❌ Pexels HTTP 에러: {e}")
-        return []
-    except Exception as e:
-        print(f"  ❌ Pexels 검색 실패: {e}")
-        return []
-
-
-def get_product_images_smart(store_name, title='', content=''):
-    """
-    스마트 이미지 검색 (Pexels 전용)
-    1순위: Pexels API (제품 카테고리 기반)
-    2순위: Pexels 일반 검색 (편의점)
-    3순위: Pexels 광범위 검색 (food)
-    """
-    all_images = []
-    
-    if not PEXELS_API_KEY:
-        print("  ❌ PEXELS_API_KEY가 설정되지 않았습니다!")
-        print("  📌 GitHub Secrets에 PEXELS_API_KEY를 추가하세요")
-        return []
-    
-    # 1) Pexels - 제품 카테고리 검색
-    if title or content:
-        category_keyword = extract_product_category(title, content)
-        print(f"  🎯 카테고리 검색: {category_keyword}")
-        images = search_pexels_images(category_keyword, count=5)
-        all_images.extend(images)
-    
-    # 2) Pexels - 편의점 일반 검색
-    if len(all_images) < 3:
-        print(f"  🔄 일반 검색으로 전환...")
-        general_keywords = [
-            "convenience store food",
-            "korean food snacks",
-            "asian food meal",
-            "food photography"
-        ]
-        for kw in general_keywords:
-            images = search_pexels_images(kw, count=3)
-            all_images.extend(images)
-            if len(all_images) >= 3:
-                break
-    
-    # 3) Pexels - 광범위 검색 (최후)
-    if len(all_images) < 3:
-        print(f"  🔄 광범위 검색...")
-        fallback_keywords = ["food", "snack", "meal", "delicious food"]
-        for kw in fallback_keywords:
-            images = search_pexels_images(kw, count=5)
-            all_images.extend(images)
-            if len(all_images) >= 3:
-                break
-    
-    # 중복 제거
-    all_images = list(dict.fromkeys(all_images))
-    
-    if len(all_images) == 0:
-        print(f"  ❌ Pexels에서 이미지를 찾지 못했습니다")
-        print(f"  📌 PEXELS_API_KEY를 확인하거나 네트워크 상태를 확인하세요")
-        return []
-    
-    print(f"  ✅ 최종 {len(all_images)}개 이미지 선택")
-    return all_images[:5]
-
-
-def download_image(image_url):
-    """이미지 다운로드"""
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(image_url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            return response.content
-        return None
-    except:
-        return None
-
-
-def upload_image_to_wordpress(image_data, filename='product.jpg'):
-    """워드프레스에 이미지 업로드"""
-    try:
-        from wordpress_xmlrpc.methods import media
-        wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
-        data = {'name': filename, 'type': 'image/jpeg', 'bits': xmlrpc_client.Binary(image_data)}
-        response = wp.call(media.UploadFile(data))
-        print(f"  ✅ 이미지 업로드 완료: {response['url']}")
-        return response['url']
-    except Exception as e:
-        print(f"  ❌ 이미지 업로드 실패: {e}")
-        return None
-
-# ========================================
 # AI 콘텐츠 생성
 # ========================================
 def generate_blog_post(store_name):
-    """AI로 블로그 글 생성 (Pexels 이미지 통합)"""
+    """AI로 블로그 글 생성 (인스타 박스 포함)"""
     try:
         print(f"  📝 {store_name} 블로그 글 생성 중...")
         
@@ -259,27 +83,72 @@ def generate_blog_post(store_name):
 1. 제목: 클릭하고 싶은 제목 (이모지 포함, 30자 이내)
    예: "🛒CU 신상! 나도 몰랐던 꿀조합✨"
 
-2. 본문: 1000-1500자
-   - 첫 문단: 친근한 인사 + 오늘 소개할 제품 미리보기
+2. 본문 구조:
+   
+   ━━━━━━━━━━━━━━━━━━
+   📱 인스타그램 복사용
+   ━━━━━━━━━━━━━━━━━━
+   
+   [짧은 캡션 3-5줄, 이모지 많이 사용]
+   
+   [해시태그 15개]
+   #편의점신상 #{store_name} #꿀조합 ...
+   
+   ━━━━━━━━━━━━━━━━━━
+   📝 블로그 전체 내용
+   ━━━━━━━━━━━━━━━━━━
+   
+   [긴 블로그 내용]
+
+3. 인스타그램 캡션:
+   - 3-5줄로 짧고 강렬하게
+   - 이모지 많이 사용 🔥💕✨
+   - MZ세대 말투 ("완전", "진짜", "대박")
+   - 제품명 + 가격 + 한줄평
+
+4. 해시태그:
+   - 정확히 15개
+   - 공백 없이 #태그 형식
+   - 편의점, 제품 관련
+
+5. 블로그 본문: 1000-1500자
+   - 첫 문단: 친근한 인사
    - 각 제품마다:
      * <h2> 태그로 큰 제목 (번호 + 제품명 + 이모지)
      * 가격은 <strong> 태그로 강조
-     * 맛 후기는 구체적으로 (식감, 맛, 향 등)
-     * 조합 꿀팁 (다른 제품과 함께 먹으면 좋은 것)
-     * 별점은 ⭐ 이모지 5개 만점으로
-   - 마지막 문단: 구매 추천 멘트
+     * 맛 후기 구체적으로 (식감, 맛, 향)
+     * 조합 꿀팁
+     * 별점 ⭐ 이모지
+   - 마지막: 구매 추천
 
-3. 친근한 말투, MZ세대 스타일 ("요즘", "완전", "진짜", "대박" 등)
+6. 실제 있을법한 제품 2-3개
+   - 가격: 1,500원~5,000원
 
-4. 실제 있을법한 제품 2-3개 소개
-   - 제품명 예: "딸기 생크림 케이크", "불닭치즈볶음면 김밥", "제주 한라봉 에이드"
-   - 가격대: 1,500원~5,000원
+7. HTML 형식 예시:
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; margin-bottom: 40px; color: white; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+<h3 style="color: white; margin-top: 0;">📱 인스타그램 복사용</h3>
+<div style="background: rgba(255,255,255,0.95); padding: 20px; border-radius: 10px; color: #333; line-height: 1.8;">
+<p><strong>캡션:</strong></p>
+<p style="font-size: 15px; margin: 15px 0;">
+요즘 핫한 {store_name} 신상 완전 대박! 🔥<br>
+딸기 생크림 케이크 3,500원에 이 퀄리티?! 🍰<br>
+진짜 편의점 디저트 찐팬은 꼭 먹어봐야 함 💕<br>
+달콤한 생크림이 입안에서 녹아요 ✨
+</p>
+<p><strong>해시태그:</strong></p>
+<p style="font-size: 14px; color: #667eea; word-break: break-all;">
+#편의점신상 #{store_name} #꿀조합 #편스타그램 #MZ추천 #편의점디저트 #딸기케이크 #편의점케이크 #데일리디저트 #오늘뭐먹지 #편의점투어 #편의점맛집 #먹스타그램 #디저트스타그램 #케이크추천
+</p>
+</div>
+</div>
 
-5. HTML 형식 예시:
+<div style="border-top: 3px solid #667eea; padding-top: 30px;">
+<h3 style="color: #667eea;">📝 블로그 전체 내용</h3>
+
 <p><strong>안녕하세요, 편스타그램 친구들!</strong> 오늘은 {store_name} 편의점에서 새롭게 출시된 맛있는 신상 제품들을 소개해드릴게요. 요즘 날씨도 쌀쌀해지고, 간편하게 즐길 수 있는 간식들이 정말 많이 나왔어요! 그럼 바로 시작해볼까요?</p>
 
 <h2>1. 딸기 생크림 케이크 🍰</h2>
-<p>첫 번째는 딸기 생크림 케이크예요! 가격은 <strong>3,500원</strong>으로 부담 없이 즐길 수 있는 간식이죠. 한 입 베어물면 신선한 딸기와 부드러운 생크림이 입 안에서 폭발! 달콤한 맛이 정말 일품이에요. 케이크가 생크림도 너무 느끼하지 않고 적당히 가벼워서 후식으로 딱 좋답니다.</p>
+<p>첫 번째는 딸기 생크림 케이크예요! 가격은 <strong>3,500원</strong>으로 부담 없이 즐길 수 있는 간식이죠. 한 입 베어물면 신선한 딸기와 부드러운 생크림이 입 안에서 폭발! 달콤한 맛이 정말 일품이에요. 케이크 스펀지도 촉촉하고, 생크림도 너무 느끼하지 않아서 후식으로 딱 좋답니다.</p>
 <p><strong>꿀조합:</strong> 이 케이크는 아메리카노와의 조합이 최고예요! 커피의 쌉싸름한 맛과 케이크의 달콤함이 환상적인 꿀조합을 만들어줍니다. 별점은 <strong>⭐⭐⭐⭐⭐</strong>!</p>
 
 <h2>2. 불닭치즈볶음면 김밥 🌶️</h2>
@@ -287,9 +156,10 @@ def generate_blog_post(store_name):
 <p><strong>꿀조합:</strong> 우유랑 같이 먹으면 매운맛을 중화시켜주면서도 고소함이 배가 돼요! 별점은 <strong>⭐⭐⭐⭐</strong>!</p>
 
 <p>오늘 소개해드린 {store_name} 신상 제품들, 어떠셨나요? 모두 가성비도 좋고 맛도 보장되는 제품들이니 꼭 한번 드셔보세요! 여러분의 편의점 꿀조합도 댓글로 알려주세요! 😊</p>
+</div>
 
 JSON 형식으로 답변:
-{{"title": "제목", "content": "HTML 본문", "tags": ["편의점신상", "{store_name}", "꿀조합", "편스타그램", "MZ추천"]}}
+{{"title": "제목", "content": "HTML 본문 전체", "tags": ["편의점신상", "{store_name}", "꿀조합", "편스타그램", "MZ추천"]}}
 """
 
         data = {
@@ -306,84 +176,7 @@ JSON 형식으로 답변:
         response.raise_for_status()
         result = json.loads(response.json()['choices'][0]['message']['content'])
 
-        # Pexels 이미지 검색 (제목/본문 기반)
-        print(f"  🔍 이미지 검색 시작...")
-        image_urls = get_product_images_smart(
-            store_name, 
-            result.get('title', ''),
-            result.get('content', '')
-        )
-        result['crawled_images'] = image_urls
-        
-        print(f"  📸 발견된 이미지: {len(image_urls)}개")
-
-        # 첫 번째 이미지 다운로드 & 업로드
-        if image_urls:
-            print(f"  ⬇️ 첫 번째 이미지 다운로드 중: {image_urls[0][:50]}...")
-            img_data = download_image(image_urls[0])
-            
-            if img_data:
-                print(f"  ✅ 다운로드 성공 ({len(img_data)} bytes)")
-                print(f"  ⬆️ 워드프레스 업로드 중...")
-                
-                img_url = upload_image_to_wordpress(
-                    img_data, 
-                    f'{store_name}_{datetime.now(KST).strftime("%Y%m%d%H%M%S")}.jpg'
-                )
-                
-                if img_url:
-                    result['featured_image'] = img_url
-                    print(f"  ✅ 이미지 업로드 성공: {img_url}")
-                else:
-                    result['featured_image'] = ''
-                    print(f"  ❌ 워드프레스 업로드 실패")
-            else:
-                result['featured_image'] = ''
-                print(f"  ❌ 이미지 다운로드 실패")
-        else:
-            result['featured_image'] = ''
-            print(f"  ❌ 검색된 이미지 없음")
-
         print(f"  ✅ 생성 완료: {result['title'][:30]}...")
-        return result
-        
-    except Exception as e:
-        print(f"  ❌ 실패: {e}")
-        traceback.print_exc()
-        return None
-
-
-def generate_instagram_post(store_name):
-    """AI로 인스타 캡션 생성 (Pexels 이미지 통합)"""
-    try:
-        print(f"  📱 {store_name} 인스타 생성 중...")
-        
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-        prompt = f"""{store_name} 편의점 신상 제품 인스타그램 캡션 작성.
-요즘 핫한 신상 1-2개 소개, 이모지 사용, MZ세대 말투, 3-5줄.
-해시태그 15개 포함.
-JSON 형식: {{"caption": "캡션 내용", "hashtags": "#편의점신상 #태그들..."}}"""
-        
-        data = {
-            "model": "gpt-4o-mini",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.9,
-            "response_format": {"type": "json_object"}
-        }
-        
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=60)
-        response.raise_for_status()
-        result = json.loads(response.json()['choices'][0]['message']['content'])
-        
-        # Pexels 이미지 검색 (캡션 기반)
-        image_urls = get_product_images_smart(
-            store_name,
-            result.get('caption', ''),
-            ''
-        )
-        result['image_urls'] = image_urls
-        
-        print(f"  ✅ 완료")
         return result
         
     except Exception as e:
@@ -394,23 +187,10 @@ JSON 형식: {{"caption": "캡션 내용", "hashtags": "#편의점신상 #태그
 # ========================================
 # 워드프레스 발행 (예약 발행 지원)
 # ========================================
-def publish_to_wordpress(title, content, tags, image_url='', scheduled_dt_kst=None):
-    """워드프레스 발행/예약발행"""
+def publish_to_wordpress(title, content, tags, scheduled_dt_kst=None):
+    """워드프레스 발행/예약발행 (이미지 없음)"""
     try:
         print(f"  📤 발행 준비: {title[:30]}...")
-        
-        # 이미지가 있으면 본문 맨 위에 큰 이미지 삽입
-        if image_url:
-            print(f"  🖼️ 이미지 삽입: {image_url}")
-            image_html = f'''
-<div style="margin-bottom: 40px; text-align: center;">
-    <img src="{image_url}" alt="{title}" 
-         style="width: 100%; max-width: 800px; height: auto; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"/>
-</div>
-'''
-            content = image_html + content
-        else:
-            print(f"  ⚠️ 이미지 URL 없음 - 이미지 없이 발행")
 
         wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
 
@@ -454,24 +234,7 @@ def send_slack(message):
         return False
 
 
-def send_slack_with_image(message, image_url):
-    """슬랙 이미지 포함 전송"""
-    try:
-        payload = {
-            "text": message,
-            "blocks": [
-                {"type": "section","text": {"type": "mrkdwn","text": message}},
-                {"type": "image","image_url": image_url,"alt_text": "제품 이미지"}
-            ]
-        }
-        response = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"  ❌ 슬랙 이미지 전송 실패: {e}")
-        return False
-
-
-def send_slack_quick_actions(title="업로드 채널 바로가기 ✨"):
+def send_slack_quick_actions(title="📱 바로가기"):
     """예쁜 버튼 3개 (워드프레스 / 인스타 / 네이버블로그)"""
     try:
         payload = {
@@ -514,44 +277,6 @@ def send_slack_quick_actions(title="업로드 채널 바로가기 ✨"):
         print(f"  ❌ 슬랙 버튼 전송 실패: {e}")
         return False
 
-
-def send_instagram_to_slack(caption, hashtags, store, image_urls):
-    """인스타그램 콘텐츠를 슬랙으로 전송"""
-    try:
-        # 이미지 다운로드 링크들
-        image_text = ""
-        if image_urls:
-            for idx, url in enumerate(image_urls[:3], 1):
-                image_text += f"\n🔵 *<{url}|📷 이미지 {idx} 다운로드>*"
-        else:
-            image_text = "\n⚠️ 이미지를 찾지 못했습니다."
-
-        message = f"""
-📱 *{store} 인스타그램 콘텐츠 준비 완료!*
-
-*캡션:*
-{caption}
-
-*해시태그:*
-{hashtags}
-
-━━━━━━━━━━━━━━━━━━
-*📸 제품 이미지 다운로드:*{image_text}
-
-━━━━━━━━━━━━━━━━━━
-✅ *업로드 방법:*
-1️⃣ 위 링크 클릭해서 이미지 다운로드
-2️⃣ 인스타그램 앱 열기  
-3️⃣ 캡션 + 해시태그 복사
-4️⃣ 이미지와 함께 업로드!
-"""
-        
-        return send_slack(message)
-        
-    except Exception as e:
-        print(f"  ❌ 슬랙 전송 실패: {e}")
-        return False
-
 # ========================================
 # 모드 1: 콘텐츠 생성 및 예약발행 (저녁 22시)
 # ========================================
@@ -583,7 +308,6 @@ def generate_and_schedule():
                 content['title'],
                 content['content'],
                 content['tags'],
-                content.get('featured_image', ''),
                 scheduled_dt_kst=scheduled_at
             )
             if result.get('success'):
@@ -596,35 +320,31 @@ def generate_and_schedule():
                 })
         time.sleep(10)
 
-    # 완료 알림
-    summary = f"🎉 *예약발행 완료!*\n\n📝 *워드프레스 예약:* {len(wp_results)}개"
+    # 완료 알림 (초간단)
+    summary = f"""🎉 *예약발행 완료!*
+
+📝 *{len(wp_results)}개 글 자동 예약:*"""
+    
     for r in wp_results:
-        summary += f"\n   • {r['store']}: {r['title'][:30]}... ⏰ {r['when']}\n     → {r['url']}"
-    summary += f"\n\n⏰ 예약 시간에 자동으로 알림 드릴게요!"
-    summary += f"\n📸 Pexels API로 고품질 이미지 자동 검색 완료!"
+        summary += f"\n✅ *{r['store']}* - {r['when']}"
+        summary += f"\n   {r['title'][:40]}..."
+        summary += f"\n   {r['url']}\n"
+    
+    summary += f"""
+━━━━━━━━━━━━━━━━━━
+📌 *사용 방법:*
+1️⃣ 워드프레스 열기
+2️⃣ 상단 "인스타그램 복사용" 박스 복사
+3️⃣ 인스타에 붙여넣기
+4️⃣ 사진 첨부 후 업로드!
+
+⏰ 예약 시간에 자동 발행됩니다!
+"""
     
     send_slack(summary)
     
-    # 인스타그램 콘텐츠도 미리 생성 (선택사항)
-    print(f"\n📱 인스타그램 콘텐츠 {INSTAGRAM_POSTS_PER_DAY}개 생성 중...")
-    print("-" * 60)
-    
-    for i in range(INSTAGRAM_POSTS_PER_DAY):
-        store = stores[i % len(stores)]
-        print(f"\n[{i+1}/{INSTAGRAM_POSTS_PER_DAY}] {store} 인스타")
-        
-        content = generate_instagram_post(store)
-        if content:
-            send_instagram_to_slack(
-                content.get('caption', ''),
-                content.get('hashtags', ''),
-                store,
-                content.get('image_urls', [])
-            )
-        time.sleep(5)
-    
     # 퀵액션 버튼
-    send_slack_quick_actions(title="업로드 채널 바로가기 ✨")
+    send_slack_quick_actions(title="📱 바로가기")
     
     print(f"\n✅ 예약발행 완료!")
 
@@ -633,7 +353,7 @@ def generate_and_schedule():
 # 모드 2: 발행 알림 (08:00, 12:00, 20:00)
 # ========================================
 def send_publish_notification():
-    """지금 시간에 발행된 글 알림 + 인스타 콘텐츠 생성"""
+    """지금 시간에 발행된 글 알림"""
     print("=" * 60)
     print(f"🔔 발행 알림: {datetime.now(KST)}")
     print("=" * 60)
@@ -658,27 +378,21 @@ def send_publish_notification():
     # 워드프레스 발행 알림
     message = f"""🎉 *{time_slot} 글 발행 완료!*
 
-📝 *{store_name}* 편의점 신상 글이 방금 발행되었어요!
+📝 *{store_name}* 글이 방금 발행되었어요!
 
-✅ 워드프레스에서 확인하고 수정할 부분 있으면 수정하세요.
-✅ 아래 버튼을 눌러 인스타/네이버에 업로드하세요!
+━━━━━━━━━━━━━━━━━━
+📌 *할 일:*
+1️⃣ 워드프레스에서 글 확인
+2️⃣ "인스타그램 복사용" 박스 복사
+3️⃣ 인스타에 붙여넣기
+4️⃣ 사진 첨부 후 업로드!
+
+✨ 간단하죠? 30초 컷!
 """
     send_slack(message)
     
-    # 인스타그램 콘텐츠 생성
-    print(f"\n📱 {store_name} 인스타그램 콘텐츠 생성 중...")
-    content = generate_instagram_post(store_name)
-    
-    if content:
-        send_instagram_to_slack(
-            content.get('caption', ''),
-            content.get('hashtags', ''),
-            store_name,
-            content.get('image_urls', [])
-        )
-    
     # 퀵액션 버튼
-    send_slack_quick_actions(title=f"{time_slot} 업로드 바로가기 ✨")
+    send_slack_quick_actions(title=f"📱 {time_slot} 바로가기")
     
     print(f"✅ {time_slot} 알림 완료!")
 
