@@ -130,17 +130,18 @@ def generate_blog_post(store_key):
 {name_kr}의 최신 신상 제품을 리뷰하는 블로그 글을 작성해주세요.
 
 요구사항:
-1. 제목: 클릭하고 싶은 제목 (이모지 포함, 30자 이내)
-   예: "🛒{name_kr} 신상! 나도 몰랐던 꿀조합✨"
+1. 제목: 클릭하고 싶은 제목 (이모지 포함, 30자 이내, 한일 병기)
+   예: "🛒{name_kr} 신상! 나도 몰랐던 꿀조합✨ (コンビニ新商品)"
 
-2. 본문: 1000-1500자
-   - 첫 문단: 친근한 인사
+2. 본문: 1200-1800자
+   - 첫 문단: 친근한 인사 (한국어)
    - 각 제품마다:
-     * <h2> 태그로 큰 제목 (번호 + 제품명 + 이모지)
+     * <h2> 태그로 큰 제목 (번호 + 제품명 + 이모지) - 큰 글씨
      * 가격은 <strong> 태그로 강조 (원 단위)
-     * 맛 후기 구체적으로 (식감, 맛, 향)
-     * 조합 꿀팁
+     * 맛 후기 구체적으로 (식감, 맛, 향) - 한국어
+     * 꿀조합 팁
      * 별점 ⭐ 이모지
+     * 🇯🇵 일본어 요약: 각 제품마다 일본어로 간단히 요약 (3-4줄)
    - 마지막: 구매 추천
 
 3. 친근한 말투, MZ세대 스타일
@@ -149,28 +150,95 @@ def generate_blog_post(store_key):
    - 가격: 1,500원~5,000원
 
 5. HTML 형식 예시:
-<p><strong>안녕하세요, 편스타그램 친구들!</strong> 오늘은 {name_kr}에서 새롭게 나온 신상 제품들을 소개해드릴게요! 🎉</p>
+<div style="max-width: 800px; margin: 0 auto; font-family: 'Malgun Gothic', sans-serif;">
 
-<h2>1. 딸기 생크림 케이크 🍰</h2>
-<p>가격은 <strong>3,500원</strong>! 달콤한 딸기와 부드러운 생크림의 조화가 환상적이에요.</p>
-<p><strong>꿀조합:</strong> 아메리카노와 함께! 별점 <strong>⭐⭐⭐⭐⭐</strong></p>
+<!-- 헤더 -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; border-radius: 20px; margin-bottom: 40px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+<h1 style="color: white; font-size: 28px; margin: 0 0 15px 0; font-weight: bold;">🛒 {name_kr} 신상 제품 리뷰!</h1>
+<p style="color: rgba(255,255,255,0.9); font-size: 16px; margin: 0;">コンビニ新商品レビュー 🇰🇷🇯🇵</p>
+</div>
 
-<h2>2. 불닭치즈볶음면 김밥 🌶️</h2>
-<p>가격은 <strong>2,800원</strong>! 매콤하지만 치즈가 느끼함을 잡아줘요.</p>
-<p><strong>꿀조합:</strong> 우유랑 함께! 별점 <strong>⭐⭐⭐⭐</strong></p>
-
-<p>오늘 소개한 {name_kr} 신상들, 꼭 드셔보세요! 😊</p>
-
-<hr style="border: none; border-top: 2px solid #ddd; margin: 40px 0;">
-
-<div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
-<p style="margin: 0; font-size: 14px; color: #667eea; line-height: 1.8;">
-#편의점신상 #{name_kr} #꿀조합 #편스타그램 #MZ추천 #편의점디저트 #편의점케이크 #데일리디저트 #오늘뭐먹지 #편의점투어 #편의점맛집 #먹스타그램 #디저트스타그램 #간식추천 #편의점꿀템
+<!-- 인사말 -->
+<div style="background: #f8f9ff; padding: 30px; border-radius: 15px; margin-bottom: 40px; border-left: 5px solid #667eea;">
+<p style="font-size: 17px; line-height: 1.8; margin: 0; color: #333;">
+<strong style="font-size: 19px;">안녕하세요, 편스타그램 친구들!</strong> 오늘은 {name_kr}에서 새롭게 나온 신상 제품들을 소개해드릴게요! 🎉 요즘 날씨도 쌀쌀해지고, 간편하게 즐길 수 있는 간식들이 정말 많이 나왔어요!
 </p>
 </div>
 
+<!-- 제품 1 -->
+<div style="background: white; padding: 35px; border-radius: 20px; margin-bottom: 35px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); border: 2px solid #f0f0f0;">
+<h2 style="color: #667eea; font-size: 26px; margin: 0 0 20px 0; font-weight: bold; border-bottom: 3px solid #667eea; padding-bottom: 15px;">1. 딸기 생크림 케이크 🍰</h2>
+
+<div style="background: #fff5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+<p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💰 가격: 3,500원</strong></p>
+</div>
+
+<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+첫 번째는 딸기 생크림 케이크예요! 한 입 베어물면 신선한 딸기와 부드러운 생크림이 입 안에서 폭발! 달콤한 맛이 정말 일품이에요. 케이크 스펀지도 촉촉하고, 생크림도 너무 느끼하지 않아서 후식으로 딱 좋답니다. 진짜 편의점 디저트 맞나 싶을 정도로 퀄리티가 좋아요!
+</p>
+
+<div style="background: #e8f5e9; padding: 18px; border-radius: 10px; margin-bottom: 20px;">
+<p style="font-size: 16px; margin: 0; color: #2e7d32;"><strong>🍯 꿀조합:</strong> 아메리카노와 함께 먹으면 커피의 쌉싸름한 맛과 케이크의 달콤함이 환상적인 조합! 꼭 시도해보세요!</p>
+</div>
+
+<p style="font-size: 17px; margin-bottom: 20px;"><strong>별점:</strong> ⭐⭐⭐⭐⭐</p>
+
+<div style="background: linear-gradient(to right, #fff3e0, #ffe0b2); padding: 20px; border-radius: 12px; border-left: 4px solid #ff9800;">
+<p style="margin: 0 0 8px 0; font-size: 15px; color: #e65100;"><strong>🇯🇵 日本語要約</strong></p>
+<p style="font-size: 14px; line-height: 1.7; color: #555; margin: 0;">
+いちご生クリームケーキ、3,500ウォン！新鮮ないちごとふわふわの生クリームが絶品です。スポンジもしっとりしていて、コンビニのデザートとは思えないクオリティ。アメリカーノと一緒に食べるのがおすすめ！⭐⭐⭐⭐⭐
+</p>
+</div>
+</div>
+
+<!-- 제품 2 -->
+<div style="background: white; padding: 35px; border-radius: 20px; margin-bottom: 35px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); border: 2px solid #f0f0f0;">
+<h2 style="color: #667eea; font-size: 26px; margin: 0 0 20px 0; font-weight: bold; border-bottom: 3px solid #667eea; padding-bottom: 15px;">2. 불닭치즈볶음면 김밥 🌶️</h2>
+
+<div style="background: #fff5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+<p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💰 가격: 2,800원</strong></p>
+</div>
+
+<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+매콤한 불닭볶음면에 치즈가 듬뿍 들어가서 맵지만 고소한 맛이 일품! 김밥 안에 불닭면이 들어있어서 한 입 베어물 때마다 쫄깃한 식감과 함께 매콤달콤한 맛이 입 안 가득 퍼집니다. 가성비도 완전 끝내주고, 한 끼 식사로도 충분해요!
+</p>
+
+<div style="background: #e8f5e9; padding: 18px; border-radius: 10px; margin-bottom: 20px;">
+<p style="font-size: 16px; margin: 0; color: #2e7d32;"><strong>🍯 꿀조합:</strong> 우유랑 같이 먹으면 매운맛을 중화시켜주면서도 고소함이 배가 돼요!</p>
+</div>
+
+<p style="font-size: 17px; margin-bottom: 20px;"><strong>별점:</strong> ⭐⭐⭐⭐</p>
+
+<div style="background: linear-gradient(to right, #fff3e0, #ffe0b2); padding: 20px; border-radius: 12px; border-left: 4px solid #ff9800;">
+<p style="margin: 0 0 8px 0; font-size: 15px; color: #e65100;"><strong>🇯🇵 日本語要約</strong></p>
+<p style="font-size: 14px; line-height: 1.7; color: #555; margin: 0;">
+プルダック炒め麺キンパ、2,800ウォン！辛いけどチーズがたっぷり入っているから、マイルドで美味しいです。もちもちした食感と甘辛い味が最高。牛乳と一緒に食べるのがベスト！⭐⭐⭐⭐
+</p>
+</div>
+</div>
+
+<!-- 마무리 -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 35px; border-radius: 20px; margin-bottom: 40px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+<p style="color: white; font-size: 18px; line-height: 1.8; margin: 0;">
+오늘 소개해드린 {name_kr} 신상 제품들, 어떠셨나요? 모두 가성비도 좋고 맛도 보장되는 제품들이니 꼭 한번 드셔보세요! 여러분의 편의점 꿀조합도 댓글로 알려주세요! 😊<br><br>
+<span style="font-size: 16px; opacity: 0.9;">今日紹介した{name_kr}の新商品、ぜひ試してみてください！🎌</span>
+</p>
+</div>
+
+<!-- 해시태그 (한국어 + 일본어) -->
+<hr style="border: none; border-top: 3px solid #667eea; margin: 50px 0 30px 0;">
+
+<div style="background: linear-gradient(to right, #f8f9ff, #fff5f8); padding: 30px; border-radius: 15px; text-align: center;">
+<p style="margin: 0 0 15px 0; font-size: 16px; color: #667eea; font-weight: bold;">📱 해시태그 / ハッシュタグ</p>
+<p style="margin: 0; font-size: 15px; color: #667eea; line-height: 2; word-break: break-all;">
+#편의점신상 #コンビニ新商品 #{name_kr} #꿀조합 #美味しい組み合わせ #편스타그램 #コンビニグルメ #MZ추천 #韓国コンビニ #편의점디저트 #コンビニデザート #편의점케이크 #ケーキ #데일리디저트 #デイリー #오늘뭐먹지 #今日何食べる #편의점투어 #コンビニ巡り #편의점맛집 #コンビニグルメ #먹스타그램 #グルメスタグラム #디저트스타그램 #デザートスタグラム #간식추천 #おやつ #편의점꿀템 #コンビニおすすめ
+</p>
+</div>
+
+</div>
+
 JSON 형식으로 답변:
-{{"title": "제목", "content": "HTML 본문 전체", "tags": ["편의점신상", "{name_kr}", "꿀조합", "편스타그램", "MZ추천"]}}
+{{"title": "제목", "content": "HTML 본문 전체", "tags": ["편의점신상", "コンビニ新商品", "{name_kr}", "꿀조합", "美味しい組み合わせ"]}}
 """
         else:
             # 일본 편의점 프롬프트
@@ -181,13 +249,11 @@ JSON 형식으로 답변:
 1. 제목: 클릭하고 싶은 제목 (이모지 포함, 한일 병기)
    예: "🇯🇵{name_kr} 신상! 프리미엄 오니기리 완전 대박 ({name_jp})✨"
 
-2. 본문: 1000-1500자
+2. 본문: 1200-1800자
    - 첫 문단: 친근한 인사 + 일본 편의점 특징 소개
    - 각 제품마다:
-     * <h2> 태그로 큰 제목 (번호 + 제품명(한국어) + 일본어 + 이모지)
-       예: <h2>1. 프리미엄 참치마요 오니기리 (ツナマヨおにぎり) 🍙</h2>
+     * <h2> 태그로 큰 제목 (번호 + 제품명(한국어) + 일본어 + 이모지) - 큰 글씨
      * 가격은 <strong> 태그로 강조 (엔 단위만, 원화 환산 X)
-       예: <strong>200엔</strong>
      * 일본 특유의 제품 특징 설명
      * 일본 편의점 문화 팁
      * 별점 ⭐ 이모지
@@ -197,35 +263,84 @@ JSON 형식으로 답변:
 
 4. 실제 일본 편의점 제품 2-3개
    - 가격: 100엔~500엔
-   - 제품 예시:
-     * 오니기리 (おにぎり) 100-200엔
-     * 벤또 (弁当) 300-500엔
-     * 디저트 200-400엔
-     * 음료 100-200엔
+   - 제품 예시: 오니기리, 벤또, 디저트, 음료
 
 5. HTML 형식 예시:
-<p><strong>안녕하세요! 일본 편의점 탐험대입니다!</strong> 🇯🇵 오늘은 일본 {name_kr}({name_jp})의 신상 제품을 소개해드릴게요! 일본 편의점은 한국과 다르게 퀄리티가 정말 높은 걸로 유명하죠!</p>
+<div style="max-width: 800px; margin: 0 auto; font-family: 'Malgun Gothic', sans-serif;">
 
-<h2>1. 프리미엄 참치마요 오니기리 (ツナマヨおにぎり) 🍙</h2>
-<p>가격은 <strong>200엔</strong>! 한국 편의점 삼각김밥과 비슷하지만 밥알이 더 찰지고 김이 바삭해요. 참치마요 소스가 진짜 듬뿍!</p>
-<p><strong>일본 팁:</strong> 편의점에서 "아타타메떼 쿠다사이(温めてください)"라고 하면 데워줘요! 별점 <strong>⭐⭐⭐⭐⭐</strong></p>
+<!-- 헤더 -->
+<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 40px 30px; border-radius: 20px; margin-bottom: 40px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+<h1 style="color: white; font-size: 28px; margin: 0 0 15px 0; font-weight: bold;">🇯🇵 {name_kr} 신상 제품 리뷰!</h1>
+<p style="color: rgba(255,255,255,0.9); font-size: 18px; margin: 0;">{name_jp} 新商品レビュー</p>
+</div>
 
-<h2>2. 카레맛 치킨 오니기리 (カレーチキンおにぎり) 🍛</h2>
-<p>가격은 <strong>180엔</strong>! 일본식 카레맛 치킨이 들어있어서 한 끼 식사로도 충분해요.</p>
-<p><strong>일본 팁:</strong> 편의점 오니기리는 새벽에 가면 할인해요! 별점 <strong>⭐⭐⭐⭐</strong></p>
-
-<p>일본 여행 가시면 {name_kr} 꼭 들러보세요! 한국에서는 맛볼 수 없는 특별한 제품들이 가득해요! 🎌</p>
-
-<hr style="border: none; border-top: 2px solid #ddd; margin: 40px 0;">
-
-<div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
-<p style="margin: 0; font-size: 14px; color: #667eea; line-height: 1.8;">
-#일본편의점 #{name_kr} #일본여행 #오니기리 #편의점투어 #일본맛집 #도쿄여행 #오사카여행 #일본출장 #편의점신상 #일본음식 #먹스타그램 #일본일주 #여행스타그램 #일본정보
+<!-- 인사말 -->
+<div style="background: #fff5f5; padding: 30px; border-radius: 15px; margin-bottom: 40px; border-left: 5px solid #ff6b6b;">
+<p style="font-size: 17px; line-height: 1.8; margin: 0; color: #333;">
+<strong style="font-size: 19px;">안녕하세요! 일본 편의점 탐험대입니다!</strong> 🇯🇵 오늘은 일본 {name_kr}({name_jp})의 신상 제품을 소개해드릴게요! 일본 편의점은 한국과 다르게 퀄리티가 정말 높은 걸로 유명하죠! 여행 가시면 꼭 들러보세요!
 </p>
 </div>
 
+<!-- 제품 1 -->
+<div style="background: white; padding: 35px; border-radius: 20px; margin-bottom: 35px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); border: 2px solid #f0f0f0;">
+<h2 style="color: #ff6b6b; font-size: 26px; margin: 0 0 20px 0; font-weight: bold; border-bottom: 3px solid #ff6b6b; padding-bottom: 15px;">1. 프리미엄 참치마요 오니기리 (ツナマヨおにぎり) 🍙</h2>
+
+<div style="background: #fff5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+<p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💴 가격: 200엔</strong></p>
+</div>
+
+<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+한국 편의점 삼각김밥과 비슷하지만 밥알이 더 찰지고 김이 바삭해요! 참치마요 소스가 진짜 듬뿍 들어있어서 한 입 베어물면 고소하고 짭조름한 맛이 입 안 가득! 일본 편의점 오니기리는 밥을 꾹꾹 눌러 만들지 않아서 식감이 훨씬 부드러워요. 한국 삼각김밥이랑 비교하면 차이가 확 느껴져요!
+</p>
+
+<div style="background: #fff3cd; padding: 18px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+<p style="font-size: 16px; margin: 0; color: #856404;"><strong>🎌 일본 팁:</strong> 편의점에서 "아타타메떼 쿠다사이(温めてください)"라고 하면 데워줘요! 따뜻한 오니기리도 별미!</p>
+</div>
+
+<p style="font-size: 17px; margin-bottom: 20px;"><strong>별점:</strong> ⭐⭐⭐⭐⭐</p>
+</div>
+
+<!-- 제품 2 -->
+<div style="background: white; padding: 35px; border-radius: 20px; margin-bottom: 35px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); border: 2px solid #f0f0f0;">
+<h2 style="color: #ff6b6b; font-size: 26px; margin: 0 0 20px 0; font-weight: bold; border-bottom: 3px solid #ff6b6b; padding-bottom: 15px;">2. 카레맛 치킨 오니기리 (カレーチキンおにぎり) 🍛</h2>
+
+<div style="background: #fff5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+<p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💴 가격: 180엔</strong></p>
+</div>
+
+<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+일본식 카레맛 치킨이 들어있어서 한 끼 식사로도 충분해요! 카레 양념이 밥에 스며들어서 매 입마다 풍미가 가득합니다. 치킨도 부드럽고 카레 맛도 진해서 정말 맛있어요. 가격 대비 양도 푸짐하고 든든해서 점심이나 야식으로 완벽!
+</p>
+
+<div style="background: #fff3cd; padding: 18px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+<p style="font-size: 16px; margin: 0; color: #856404;"><strong>🎌 일본 팁:</strong> 편의점 오니기리는 새벽에 가면 20-30% 할인해요! 밤샘 여행자 꿀팁!</p>
+</div>
+
+<p style="font-size: 17px; margin-bottom: 20px;"><strong>별점:</strong> ⭐⭐⭐⭐</p>
+</div>
+
+<!-- 마무리 -->
+<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 35px; border-radius: 20px; margin-bottom: 40px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+<p style="color: white; font-size: 18px; line-height: 1.8; margin: 0;">
+일본 여행 가시면 {name_kr} 꼭 들러보세요! 한국에서는 맛볼 수 없는 특별한 제품들이 가득해요! 🎌<br><br>
+<span style="font-size: 16px; opacity: 0.9;">日本旅行の際は、ぜひ{name_jp}に立ち寄ってみてください！</span>
+</p>
+</div>
+
+<!-- 해시태그 (한국어 + 일본어) -->
+<hr style="border: none; border-top: 3px solid #ff6b6b; margin: 50px 0 30px 0;">
+
+<div style="background: linear-gradient(to right, #fff5f5, #ffe0e0); padding: 30px; border-radius: 15px; text-align: center;">
+<p style="margin: 0 0 15px 0; font-size: 16px; color: #ff6b6b; font-weight: bold;">📱 해시태그 / ハッシュタグ</p>
+<p style="margin: 0; font-size: 15px; color: #ff6b6b; line-height: 2; word-break: break-all;">
+#일본편의점 #日本コンビニ #{name_kr} #{name_jp} #일본여행 #日本旅行 #오니기리 #おにぎり #편의점투어 #コンビニ巡り #일본맛집 #日本グルメ #도쿄여행 #東京旅行 #오사카여행 #大阪旅行 #일본출장 #日本出張 #편의점신상 #コンビニ新商品 #일본음식 #和食 #먹스타그램 #グルメスタグラム #일본일주 #日本一周 #여행스타그램 #トラベルスタグラム #일본정보 #日本情報
+</p>
+</div>
+
+</div>
+
 JSON 형식으로 답변:
-{{"title": "제목", "content": "HTML 본문 전체", "tags": ["일본편의점", "{name_kr}", "일본여행", "오니기리", "편의점투어"]}}
+{{"title": "제목", "content": "HTML 본문 전체", "tags": ["일본편의점", "日本コンビニ", "{name_kr}", "{name_jp}", "일본여행", "日本旅行"]}}
 """
 
         data = {
