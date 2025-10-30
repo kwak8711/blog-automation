@@ -160,7 +160,7 @@ def generate_blog_post(store_key):
 
 <!-- 인사말 -->
 <div style="background: #f8f9ff; padding: 30px; border-radius: 15px; margin-bottom: 40px; border-left: 5px solid #667eea;">
-<p style="font-size: 17px; line-height: 1.8; margin: 0; color: #333;">
+<p style="font-size: 17px; line-height: 1.8; margin: 0; color: #222; font-weight: 500;">
 <strong style="font-size: 19px;">안녕하세요, 편스타그램 친구들!</strong> 오늘은 {name_kr}에서 새롭게 나온 신상 제품들을 소개해드릴게요! 🎉 요즘 날씨도 쌀쌀해지고, 간편하게 즐길 수 있는 간식들이 정말 많이 나왔어요!
 </p>
 </div>
@@ -173,7 +173,7 @@ def generate_blog_post(store_key):
 <p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💰 가격: 3,500원</strong></p>
 </div>
 
-<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+<p style="font-size: 16px; line-height: 1.9; color: #222; margin-bottom: 20px; font-weight: 500;">
 첫 번째는 딸기 생크림 케이크예요! 한 입 베어물면 신선한 딸기와 부드러운 생크림이 입 안에서 폭발! 달콤한 맛이 정말 일품이에요. 케이크 스펀지도 촉촉하고, 생크림도 너무 느끼하지 않아서 후식으로 딱 좋답니다. 진짜 편의점 디저트 맞나 싶을 정도로 퀄리티가 좋아요!
 </p>
 
@@ -199,7 +199,7 @@ def generate_blog_post(store_key):
 <p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💰 가격: 2,800원</strong></p>
 </div>
 
-<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+<p style="font-size: 16px; line-height: 1.9; color: #222; margin-bottom: 20px; font-weight: 500;">
 매콤한 불닭볶음면에 치즈가 듬뿍 들어가서 맵지만 고소한 맛이 일품! 김밥 안에 불닭면이 들어있어서 한 입 베어물 때마다 쫄깃한 식감과 함께 매콤달콤한 맛이 입 안 가득 퍼집니다. 가성비도 완전 끝내주고, 한 끼 식사로도 충분해요!
 </p>
 
@@ -276,7 +276,7 @@ JSON 형식으로 답변:
 
 <!-- 인사말 -->
 <div style="background: #fff5f5; padding: 30px; border-radius: 15px; margin-bottom: 40px; border-left: 5px solid #ff6b6b;">
-<p style="font-size: 17px; line-height: 1.8; margin: 0; color: #333;">
+<p style="font-size: 17px; line-height: 1.8; margin: 0; color: #222; font-weight: 500;">
 <strong style="font-size: 19px;">안녕하세요! 일본 편의점 탐험대입니다!</strong> 🇯🇵 오늘은 일본 {name_kr}({name_jp})의 신상 제품을 소개해드릴게요! 일본 편의점은 한국과 다르게 퀄리티가 정말 높은 걸로 유명하죠! 여행 가시면 꼭 들러보세요!
 </p>
 </div>
@@ -289,7 +289,7 @@ JSON 형식으로 답변:
 <p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💴 가격: 200엔</strong></p>
 </div>
 
-<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+<p style="font-size: 16px; line-height: 1.9; color: #222; margin-bottom: 20px; font-weight: 500;">
 한국 편의점 삼각김밥과 비슷하지만 밥알이 더 찰지고 김이 바삭해요! 참치마요 소스가 진짜 듬뿍 들어있어서 한 입 베어물면 고소하고 짭조름한 맛이 입 안 가득! 일본 편의점 오니기리는 밥을 꾹꾹 눌러 만들지 않아서 식감이 훨씬 부드러워요. 한국 삼각김밥이랑 비교하면 차이가 확 느껴져요!
 </p>
 
@@ -308,7 +308,7 @@ JSON 형식으로 답변:
 <p style="font-size: 18px; margin: 0; color: #e63946;"><strong style="font-size: 22px;">💴 가격: 180엔</strong></p>
 </div>
 
-<p style="font-size: 16px; line-height: 1.9; color: #444; margin-bottom: 20px;">
+<p style="font-size: 16px; line-height: 1.9; color: #222; margin-bottom: 20px; font-weight: 500;">
 일본식 카레맛 치킨이 들어있어서 한 끼 식사로도 충분해요! 카레 양념이 밥에 스며들어서 매 입마다 풍미가 가득합니다. 치킨도 부드럽고 카레 맛도 진해서 정말 맛있어요. 가격 대비 양도 푸짐하고 든든해서 점심이나 야식으로 완벽!
 </p>
 
@@ -386,11 +386,11 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst=None):
         post.terms_names = {'post_tag': tags, 'category': [category]}
 
         if scheduled_dt_kst:
-            # 예약 발행
-            dt_kst = scheduled_dt_kst.astimezone(KST)
-            dt_utc = dt_kst.astimezone(timezone.utc)
+            # 예약 발행 - UTC로 변환
+            dt_utc = scheduled_dt_kst.astimezone(timezone.utc)
             post.post_status = 'future'
-            post.date = dt_kst.replace(tzinfo=None)
+            # 워드프레스는 UTC 시간 사용
+            post.date = dt_utc.replace(tzinfo=None)
             post.date_gmt = dt_utc.replace(tzinfo=None)
             action = '예약발행'
         else:
