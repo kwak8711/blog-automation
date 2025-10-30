@@ -421,9 +421,35 @@ JSON 형식으로 답변:
             "response_format": {"type": "json_object"}
         }
         
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=60)
-        response.raise_for_status()
-        result = json.loads(response.json()['choices'][0]['message']['content'])
+        # 재시도 로직 (최대 3번)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"  🔄 API 호출 시도 {attempt + 1}/{max_retries}...")
+                response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=90)
+                
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = 30 * (attempt + 1)  # 30초, 60초, 90초
+                        print(f"  ⚠️ Rate Limit! {wait_time}초 대기 후 재시도...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"  ❌ Rate Limit 초과! 나중에 다시 시도하세요.")
+                        return None
+                
+                response.raise_for_status()
+                result = json.loads(response.json()['choices'][0]['message']['content'])
+                break  # 성공!
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"  ⚠️ 에러 발생: {e}. 재시도 중...")
+                    time.sleep(15)
+                    continue
+                else:
+                    print(f"  ❌ 최종 실패: {e}")
+                    return None
 
         # 카테고리 추가
         result['category'] = store_info['category']
@@ -565,19 +591,43 @@ def generate_and_schedule():
         print(f"   {slot.strftime('%Y-%m-%d %H:%M')} - {store_info['name_kr']} {flag}")
 
     # 워드프레스 글 생성 + 예약발행
-    print(f"\n📝 블로그 {POSTS_PER_DAY}개 예약발행 중...")
+    print(f"\n📝 블로그 {POSTS_PER_DAY}개 예약발행 시작...")
+    print(f"⚠️ OpenAI Rate Limit 방지를 위해 3개씩 나눠서 생성합니다.")
     print("-" * 60)
     
-    for i in range(POSTS_PER_DAY):
+    # 3개씩 배치로 나누기
+    batch_size = 3
+    total_batches = (POSTS_PER_DAY + batch_size - 1) // batch_size  # 올림 나눗셈
+    
+    for batch_num in range(total_batches):
+        start_idx = batch_num * batch_size
+        end_idx = min(start_idx + batch_size, POSTS_PER_DAY)
+        
+        print(f"\n{'🔥'*20}")
+        print(f"📦 배치 {batch_num + 1}/{total_batches}: {start_idx + 1}~{end_idx}번째 글 생성")
+        print(f"{'🔥'*20}")
+        
+        for i in range(start_idx, end_idx):
         store_key = store_order[i % len(store_order)]
         store_info = STORES[store_key]
         scheduled_at = slots[i]
         
         flag = '🇯🇵' if store_info['country'] == 'jp' else '🇰🇷'
-        print(f"\n[{i+1}/{POSTS_PER_DAY}] {store_info['name_kr']} {flag} @ {scheduled_at.strftime('%Y-%m-%d %H:%M')}")
+        print(f"\n{'='*60}")
+        print(f"[{i+1}/{POSTS_PER_DAY}] {store_info['name_kr']} {flag} @ {scheduled_at.strftime('%Y-%m-%d %H:%M')}")
+        print(f"{'='*60}")
 
-        content = generate_blog_post(store_key)
-        if content:
+        try:
+            print(f"  🤖 AI 콘텐츠 생성 시작...")
+            content = generate_blog_post(store_key)
+            
+            if not content:
+                print(f"  ❌ [{i+1}] 콘텐츠 생성 실패! content is None")
+                continue
+                
+            print(f"  ✅ 콘텐츠 생성 완료: {content['title'][:30]}...")
+            
+            print(f"  📤 워드프레스 발행 시작...")
             result = publish_to_wordpress(
                 content['title'],
                 content['content'],
@@ -585,7 +635,9 @@ def generate_and_schedule():
                 content['category'],
                 scheduled_dt_kst=scheduled_at
             )
+            
             if result.get('success'):
+                print(f"  ✅ [{i+1}] 워드프레스 발행 성공!")
                 post_data = {
                     'store': store_info['name_kr'],
                     'country': store_info['country'],
@@ -594,14 +646,33 @@ def generate_and_schedule():
                     'when': scheduled_at.strftime('%Y-%m-%d %H:%M'),
                     'post_id': result['post_id'],
                     'text_version': content.get('text_version', '')[:500],
-                    'hour': scheduled_at.hour,  # 발행 시간
-                    'full_text': content.get('text_version', '')  # 전체 텍스트
+                    'hour': scheduled_at.hour,
+                    'full_text': content.get('text_version', '')
                 }
                 wp_results.append(post_data)
+                print(f"  💾 결과 저장 완료 (총 {len(wp_results)}개)")
                 
-                # 발행 시간별로 본문 저장 (나중에 알림에서 사용)
+                # 발행 시간별로 본문 저장
                 save_post_content(scheduled_at.hour, post_data)
-        time.sleep(10)
+            else:
+                print(f"  ❌ [{i+1}] 워드프레스 발행 실패!")
+                
+        except Exception as e:
+            print(f"  ❌ [{i+1}] 에러 발생: {e}")
+            traceback.print_exc()
+            continue
+            
+        print(f"  ⏱️ 20초 대기 중... (OpenAI Rate Limit 방지)")
+        time.sleep(20)
+        
+        # 배치 간 추가 대기 (마지막 배치 제외)
+        if batch_num < total_batches - 1 and i == end_idx - 1:
+            print(f"\n⏸️ 배치 {batch_num + 1} 완료! 다음 배치 전 60초 대기...")
+            time.sleep(60)
+    
+    print(f"\n{'='*60}")
+    print(f"🎉 반복 완료! 총 {len(wp_results)}개 글 발행 성공!")
+    print(f"{'='*60}")
 
     # 완료 알림
     korean_posts = [r for r in wp_results if r['country'] == 'kr']
