@@ -1,18 +1,27 @@
-name: Blog Automation
+name: Blog Automation (한국 + 일본 편의점)
 
 on:
   schedule:
     # 매일 저녁 22:00 (KST = UTC+9) → UTC 13:00에 콘텐츠 생성 및 예약발행
     - cron: '0 13 * * *'
     
-    # 다음날 아침 08:00 (KST) → UTC 23:00 (전날)에 알림
+    # 아침 08:00 (KST) → UTC 23:00 (전날)에 알림 (한국 - GS25)
     - cron: '0 23 * * *'
     
-    # 점심 12:00 (KST) → UTC 03:00에 알림
+    # 아침 09:00 (KST) → UTC 00:00에 알림 (일본 - 세븐일레븐)
+    - cron: '0 0 * * *'
+    
+    # 점심 12:00 (KST) → UTC 03:00에 알림 (한국 - CU)
     - cron: '0 3 * * *'
     
-    # 저녁 20:00 (KST) → UTC 11:00에 알림
+    # 점심 13:00 (KST) → UTC 04:00에 알림 (일본 - 패밀리마트)
+    - cron: '0 4 * * *'
+    
+    # 저녁 20:00 (KST) → UTC 11:00에 알림 (한국 - 세븐일레븐)
     - cron: '0 11 * * *'
+    
+    # 저녁 21:00 (KST) → UTC 12:00에 알림 (일본 - 로손)
+    - cron: '0 12 * * *'
     
   workflow_dispatch:
     inputs:
@@ -22,7 +31,7 @@ on:
         default: 'generate'
         type: choice
         options:
-          - generate  # 콘텐츠 생성 및 예약발행
+          - generate  # 콘텐츠 생성 및 예약발행 (한국 3개 + 일본 3개)
           - notify    # 발행 알림만
 
 jobs:
@@ -54,14 +63,13 @@ jobs:
           echo "MODE=notify" >> $GITHUB_ENV
         fi
     
-    - name: 자동화 스크립트 실행
+    - name: 한일 편의점 자동화 실행
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
         WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
-        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         INSTAGRAM_PROFILE_URL: ${{ secrets.INSTAGRAM_PROFILE_URL }}
         NAVER_BLOG_URL: ${{ secrets.NAVER_BLOG_URL }}
         MODE: ${{ env.MODE }}
