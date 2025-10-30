@@ -421,8 +421,8 @@ JSON 형식으로 답변:
             "response_format": {"type": "json_object"}
         }
         
-        # 재시도 로직 (최대 3번)
-        max_retries = 3
+        # 재시도 로직 (최대 5번)
+        max_retries = 5
         for attempt in range(max_retries):
             try:
                 print(f"  🔄 API 호출 시도 {attempt + 1}/{max_retries}...")
@@ -430,7 +430,7 @@ JSON 형식으로 답변:
                 
                 if response.status_code == 429:
                     if attempt < max_retries - 1:
-                        wait_time = 30 * (attempt + 1)  # 30초, 60초, 90초
+                        wait_time = 60 * (attempt + 1)  # 60초, 120초, 180초, 240초, 300초
                         print(f"  ⚠️ Rate Limit! {wait_time}초 대기 후 재시도...")
                         time.sleep(wait_time)
                         continue
@@ -445,7 +445,7 @@ JSON 형식으로 답변:
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"  ⚠️ 에러 발생: {e}. 재시도 중...")
-                    time.sleep(15)
+                    time.sleep(30)
                     continue
                 else:
                     print(f"  ❌ 최종 실패: {e}")
@@ -662,13 +662,13 @@ def generate_and_schedule():
                 traceback.print_exc()
                 continue
                 
-            print(f"  ⏱️ 20초 대기 중... (OpenAI Rate Limit 방지)")
-            time.sleep(20)
+            print(f"  ⏱️ 40초 대기 중... (OpenAI Rate Limit 방지)")
+            time.sleep(40)
             
             # 배치 간 추가 대기 (마지막 배치 제외)
             if batch_num < total_batches - 1 and i == end_idx - 1:
-                print(f"\n⏸️ 배치 {batch_num + 1} 완료! 다음 배치 전 60초 대기...")
-                time.sleep(60)
+                print(f"\n⏸️ 배치 {batch_num + 1} 완료! 다음 배치 전 120초 대기...")
+                time.sleep(120)
     
     print(f"\n{'='*60}")
     print(f"🎉 반복 완료! 총 {len(wp_results)}개 글 발행 성공!")
