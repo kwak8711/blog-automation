@@ -608,18 +608,18 @@ def generate_and_schedule():
         print(f"{'🔥'*20}")
         
         for i in range(start_idx, end_idx):
-        store_key = store_order[i % len(store_order)]
-        store_info = STORES[store_key]
-        scheduled_at = slots[i]
-        
-        flag = '🇯🇵' if store_info['country'] == 'jp' else '🇰🇷'
-        print(f"\n{'='*60}")
-        print(f"[{i+1}/{POSTS_PER_DAY}] {store_info['name_kr']} {flag} @ {scheduled_at.strftime('%Y-%m-%d %H:%M')}")
-        print(f"{'='*60}")
+            store_key = store_order[i % len(store_order)]
+            store_info = STORES[store_key]
+            scheduled_at = slots[i]
+            
+            flag = '🇯🇵' if store_info['country'] == 'jp' else '🇰🇷'
+            print(f"\n{'='*60}")
+            print(f"[{i+1}/{POSTS_PER_DAY}] {store_info['name_kr']} {flag} @ {scheduled_at.strftime('%Y-%m-%d %H:%M')}")
+            print(f"{'='*60}")
 
-        try:
-            print(f"  🤖 AI 콘텐츠 생성 시작...")
-            content = generate_blog_post(store_key)
+            try:
+                print(f"  🤖 AI 콘텐츠 생성 시작...")
+                content = generate_blog_post(store_key)
             
             if not content:
                 print(f"  ❌ [{i+1}] 콘텐츠 생성 실패! content is None")
@@ -657,18 +657,18 @@ def generate_and_schedule():
             else:
                 print(f"  ❌ [{i+1}] 워드프레스 발행 실패!")
                 
-        except Exception as e:
-            print(f"  ❌ [{i+1}] 에러 발생: {e}")
-            traceback.print_exc()
-            continue
+            except Exception as e:
+                print(f"  ❌ [{i+1}] 에러 발생: {e}")
+                traceback.print_exc()
+                continue
+                
+            print(f"  ⏱️ 20초 대기 중... (OpenAI Rate Limit 방지)")
+            time.sleep(20)
             
-        print(f"  ⏱️ 20초 대기 중... (OpenAI Rate Limit 방지)")
-        time.sleep(20)
-        
-        # 배치 간 추가 대기 (마지막 배치 제외)
-        if batch_num < total_batches - 1 and i == end_idx - 1:
-            print(f"\n⏸️ 배치 {batch_num + 1} 완료! 다음 배치 전 60초 대기...")
-            time.sleep(60)
+            # 배치 간 추가 대기 (마지막 배치 제외)
+            if batch_num < total_batches - 1 and i == end_idx - 1:
+                print(f"\n⏸️ 배치 {batch_num + 1} 완료! 다음 배치 전 60초 대기...")
+                time.sleep(60)
     
     print(f"\n{'='*60}")
     print(f"🎉 반복 완료! 총 {len(wp_results)}개 글 발행 성공!")
