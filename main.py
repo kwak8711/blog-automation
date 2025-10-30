@@ -22,7 +22,7 @@ WORDPRESS_PASSWORD   = os.environ.get('WORDPRESS_PASSWORD')
 INSTAGRAM_PROFILE_URL = os.environ.get('INSTAGRAM_PROFILE_URL', 'https://instagram.com/')
 NAVER_BLOG_URL        = os.environ.get('NAVER_BLOG_URL', 'https://blog.naver.com/')
 
-POSTS_PER_DAY = 6  # 한국 3개 + 일본 3개
+POSTS_PER_DAY = 2  # 한 번에 2개씩 (시간 분산 전략)
 
 KST = ZoneInfo('Asia/Seoul')
 
@@ -430,8 +430,8 @@ JSON 형식으로 답변:
                 
                 if response.status_code == 429:
                     if attempt < max_retries - 1:
-                        wait_time = 60 * (attempt + 1)  # 60초, 120초, 180초, 240초, 300초
-                        print(f"  ⚠️ Rate Limit! {wait_time}초 대기 후 재시도...")
+                        wait_time = 120 * (attempt + 1)  # 120초, 240초, 360초, 480초, 600초 (2분, 4분, 6분, 8분, 10분)
+                        print(f"  ⚠️ Rate Limit! {wait_time}초 ({wait_time//60}분) 대기 후 재시도...")
                         time.sleep(wait_time)
                         continue
                     else:
@@ -445,7 +445,7 @@ JSON 형식으로 답변:
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"  ⚠️ 에러 발생: {e}. 재시도 중...")
-                    time.sleep(30)
+                    time.sleep(60)
                     continue
                 else:
                     print(f"  ❌ 최종 실패: {e}")
@@ -569,15 +569,24 @@ def generate_and_schedule():
     print(f"🚀 한일 편의점 콘텐츠 생성: {datetime.now(KST)}")
     print("=" * 60)
 
-    # 발행 순서 (한국/일본 번갈아)
-    store_order = [
-        'GS25',              # 08시 (한국)
-        '세븐일레븐_일본',    # 09시 (일본)
-        'CU',                # 12시 (한국)
-        '패밀리마트',        # 13시 (일본)
-        '세븐일레븐_한국',    # 20시 (한국)
-        '로손'               # 21시 (일본)
-    ]
+    # 시간대별 발행 순서 결정
+    current_hour = datetime.now(KST).hour
+    
+    if current_hour == 23:  # 밤 11시
+        store_order = [
+            'GS25',              # 08시 (한국)
+            '세븐일레븐_일본',    # 09시 (일본)
+        ]
+    elif current_hour == 1:  # 새벽 1시
+        store_order = [
+            'CU',                # 12시 (한국)
+            '패밀리마트',        # 13시 (일본)
+        ]
+    else:  # 새벽 3시 또는 기본
+        store_order = [
+            '세븐일레븐_한국',    # 20시 (한국)
+            '로손'               # 21시 (일본)
+        ]
     
     wp_results = []
 
@@ -592,22 +601,10 @@ def generate_and_schedule():
 
     # 워드프레스 글 생성 + 예약발행
     print(f"\n📝 블로그 {POSTS_PER_DAY}개 예약발행 시작...")
-    print(f"⚠️ OpenAI Rate Limit 방지를 위해 3개씩 나눠서 생성합니다.")
+    print(f"⚠️ OpenAI Rate Limit 방지를 위해 천천히 생성합니다.")
     print("-" * 60)
     
-    # 3개씩 배치로 나누기
-    batch_size = 3
-    total_batches = (POSTS_PER_DAY + batch_size - 1) // batch_size  # 올림 나눗셈
-    
-    for batch_num in range(total_batches):
-        start_idx = batch_num * batch_size
-        end_idx = min(start_idx + batch_size, POSTS_PER_DAY)
-        
-        print(f"\n{'🔥'*20}")
-        print(f"📦 배치 {batch_num + 1}/{total_batches}: {start_idx + 1}~{end_idx}번째 글 생성")
-        print(f"{'🔥'*20}")
-        
-        for i in range(start_idx, end_idx):
+    for i in range(POSTS_PER_DAY):
             store_key = store_order[i % len(store_order)]
             store_info = STORES[store_key]
             scheduled_at = slots[i]
@@ -662,13 +659,10 @@ def generate_and_schedule():
                 traceback.print_exc()
                 continue
                 
-            print(f"  ⏱️ 40초 대기 중... (OpenAI Rate Limit 방지)")
-            time.sleep(40)
-            
-            # 배치 간 추가 대기 (마지막 배치 제외)
-            if batch_num < total_batches - 1 and i == end_idx - 1:
-                print(f"\n⏸️ 배치 {batch_num + 1} 완료! 다음 배치 전 120초 대기...")
-                time.sleep(120)
+            # 첫 번째 글 후에만 대기 (두 번째는 필요 없음)
+            if i == 0 and POSTS_PER_DAY > 1:
+                print(f"  ⏱️ 60초 대기 중... (다음 글 준비)")
+                time.sleep(60)
     
     print(f"\n{'='*60}")
     print(f"🎉 반복 완료! 총 {len(wp_results)}개 글 발행 성공!")
