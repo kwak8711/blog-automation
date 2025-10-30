@@ -57,7 +57,7 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
-        elif [ "${{ github.event.schedule }}" = "0 13 * * *" ]; then
+        elif [ "${{ github.event.schedule }}" = "0 15 * * *" ]; then
           echo "MODE=generate" >> $GITHUB_ENV
         else
           echo "MODE=notify" >> $GITHUB_ENV
