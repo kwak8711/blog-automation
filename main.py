@@ -2,6 +2,7 @@ import os
 import json
 import traceback
 import requests
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from wordpress_xmlrpc import Client, WordPressPost
@@ -74,6 +75,35 @@ STORES = {
 }
 
 # ========================================
+# HTML → 텍스트 변환 (인스타용)
+# ========================================
+def create_text_version(html_content):
+    """HTML을 인스타용 순수 텍스트로 변환"""
+    # HTML 태그 제거
+    text = re.sub(r'<div[^>]*>', '\n', html_content)
+    text = re.sub(r'</div>', '\n', text)
+    text = re.sub(r'<h1[^>]*>', '\n━━━━━━━━━━━━━━━━\n', text)
+    text = re.sub(r'</h1>', '\n━━━━━━━━━━━━━━━━\n', text)
+    text = re.sub(r'<h2[^>]*>', '\n\n📍 ', text)
+    text = re.sub(r'</h2>', '\n', text)
+    text = re.sub(r'<p[^>]*>', '', text)
+    text = re.sub(r'</p>', '\n', text)
+    text = re.sub(r'<strong[^>]*>', '✨ ', text)
+    text = re.sub(r'</strong>', ' ✨', text)
+    text = re.sub(r'<hr[^>]*>', '\n━━━━━━━━━━━━━━━━\n', text)
+    text = re.sub(r'<br\s*/?>', '\n', text)
+    text = re.sub(r'<span[^>]*>', '', text)
+    text = re.sub(r'</span>', '', text)
+    text = re.sub(r'<[^>]+>', '', text)  # 남은 모든 HTML 태그 제거
+    
+    # 공백 정리
+    text = re.sub(r'\n{3,}', '\n\n', text)  # 3줄 이상 → 2줄
+    text = re.sub(r'[ \t]+', ' ', text)      # 연속 공백 → 1개
+    text = text.strip()
+    
+    return text
+
+# ========================================
 # 예약 슬롯 계산: 08, 09, 12, 13, 20, 21시
 # ========================================
 def next_slots_korean_japanese(count=6):
@@ -82,29 +112,26 @@ def next_slots_korean_japanese(count=6):
     08(한) → 09(일) → 12(한) → 13(일) → 20(한) → 21(일)
     """
     now = datetime.now(KST)
-    today_slots = [
-        now.replace(hour=8, minute=0, second=0, microsecond=0),
-        now.replace(hour=9, minute=0, second=0, microsecond=0),
-        now.replace(hour=12, minute=0, second=0, microsecond=0),
-        now.replace(hour=13, minute=0, second=0, microsecond=0),
-        now.replace(hour=20, minute=0, second=0, microsecond=0),
-        now.replace(hour=21, minute=0, second=0, microsecond=0),
-    ]
+    slot_hours = [8, 9, 12, 13, 20, 21]
     
     candidates = []
     
-    # 현재 시각 이후의 슬롯만 추가
-    for slot in today_slots:
-        if now < slot:
-            candidates.append(slot)
+    # 오늘 남은 슬롯 찾기
+    for hour in slot_hours:
+        slot_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if now < slot_time:
+            candidates.append(slot_time)
     
     # 부족하면 다음날 슬롯 추가
+    days_ahead = 1
     while len(candidates) < count:
-        next_day = (candidates[-1] if candidates else now) + timedelta(days=1)
-        for hour in [8, 9, 12, 13, 20, 21]:
+        next_day = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=days_ahead)
+        for hour in slot_hours:
             if len(candidates) >= count:
                 break
-            candidates.append(next_day.replace(hour=hour, minute=0, second=0, microsecond=0))
+            slot_time = next_day.replace(hour=hour, minute=0, second=0, microsecond=0)
+            candidates.append(slot_time)
+        days_ahead += 1
     
     return candidates[:count]
 
@@ -361,6 +388,9 @@ JSON 형식으로 답변:
         result['category'] = store_info['category']
         result['country'] = country
         result['store_key'] = store_key
+        
+        # 텍스트 버전 생성 (인스타용)
+        result['text_version'] = create_text_version(result['content'])
 
         print(f"  ✅ 생성 완료: {result['title'][:30]}...")
         return result
@@ -542,15 +572,20 @@ def generate_and_schedule():
         flag = '🇯🇵' if r['country'] == 'jp' else '🇰🇷'
         summary += f"\n{flag} *{r['store']}* - {r['when']}"
         summary += f"\n   {r['title'][:40]}..."
-        summary += f"\n   {r['url']}\n"
+        summary += f"\n   📝 {r['url']}"
+        if 'text_url' in r:
+            summary += f"\n   📱 인스타용: {r['text_url']}"
+        summary += "\n"
     
     summary += f"""
 ━━━━━━━━━━━━━━━━━━
 📌 *사용 방법:*
 1️⃣ 워드프레스 열기
-2️⃣ 맨 아래 해시태그 복사
+2️⃣ 본문 전체를 "미리보기"에서 복사
 3️⃣ 인스타/네이버에 붙여넣기
 4️⃣ 사진 첨부 후 업로드!
+
+💡 *TIP:* 미리보기로 복사하면 HTML 태그 없이 깔끔!
 
 ⏰ 예약 시간에 자동 발행됩니다!
 """
