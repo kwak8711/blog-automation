@@ -75,6 +75,30 @@ STORES = {
 }
 
 # ========================================
+# 본문 저장/불러오기 (발행 알림용)
+# ========================================
+def save_post_content(hour, post_data):
+    """예약된 글의 본문을 시간별로 저장"""
+    try:
+        filename = f"/tmp/post_content_{hour}.json"
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(post_data, f, ensure_ascii=False, indent=2)
+        print(f"  💾 본문 저장: {filename}")
+    except Exception as e:
+        print(f"  ⚠️ 본문 저장 실패: {e}")
+
+def load_post_content(hour):
+    """저장된 글의 본문 불러오기"""
+    try:
+        filename = f"/tmp/post_content_{hour}.json"
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"  ⚠️ 본문 불러오기 실패: {e}")
+    return None
+
+# ========================================
 # HTML → 텍스트 변환 (인스타용)
 # ========================================
 def create_text_version(html_content):
@@ -545,14 +569,21 @@ def generate_and_schedule():
                 scheduled_dt_kst=scheduled_at
             )
             if result.get('success'):
-                wp_results.append({
+                post_data = {
                     'store': store_info['name_kr'],
                     'country': store_info['country'],
                     'title': content['title'],
                     'url': result['url'],
                     'when': scheduled_at.strftime('%Y-%m-%d %H:%M'),
-                    'post_id': result['post_id']
-                })
+                    'post_id': result['post_id'],
+                    'text_version': content.get('text_version', '')[:500],
+                    'hour': scheduled_at.hour,  # 발행 시간
+                    'full_text': content.get('text_version', '')  # 전체 텍스트
+                }
+                wp_results.append(post_data)
+                
+                # 발행 시간별로 본문 저장 (나중에 알림에서 사용)
+                save_post_content(scheduled_at.hour, post_data)
         time.sleep(10)
 
     # 완료 알림
@@ -575,6 +606,12 @@ def generate_and_schedule():
         summary += f"\n   📝 {r['url']}"
         if 'text_url' in r:
             summary += f"\n   📱 인스타용: {r['text_url']}"
+        
+        # 본문 미리보기 추가 (처음 150자)
+        if 'text_version' in r and r['text_version']:
+            preview = r['text_version'][:150].replace('\n', ' ')
+            summary += f"\n   💬 {preview}..."
+        
         summary += "\n"
     
     summary += f"""
@@ -602,7 +639,7 @@ def generate_and_schedule():
 # 모드 2: 발행 알림
 # ========================================
 def send_publish_notification():
-    """지금 시간에 발행된 글 알림"""
+    """지금 시간에 발행된 글 알림 + 본문 전송"""
     print("=" * 60)
     print(f"🔔 발행 알림: {datetime.now(KST)}")
     print("=" * 60)
@@ -627,26 +664,59 @@ def send_publish_notification():
     time_slot, store_name, country = time_slot_map[current_hour]
     flag = "🇯🇵" if country == "jp" else "🇰🇷"
     
-    # 워드프레스 발행 알림
+    # 저장된 본문 불러오기
+    post_content = load_post_content(current_hour)
+    
+    # 기본 알림
     message = f"""🎉 *{time_slot} 글 발행 완료!*
 
 {flag} *{store_name}* 글이 방금 발행되었어요!
+"""
+    
+    # 본문이 있으면 추가
+    if post_content:
+        message += f"""
+━━━━━━━━━━━━━━━━━━
+📝 *제목:* {post_content['title']}
+
+🔗 *링크:* {post_content['url']}
 
 ━━━━━━━━━━━━━━━━━━
+"""
+    
+    message += """
 📌 *할 일:*
-1️⃣ 워드프레스에서 글 확인
-2️⃣ 맨 아래 해시태그 복사
+1️⃣ 워드프레스에서 "미리보기" 클릭
+2️⃣ 본문 전체 복사
 3️⃣ 인스타에 붙여넣기
 4️⃣ 사진 첨부 후 업로드!
 
 ✨ 간단하죠? 30초 컷!
 """
+    
     send_slack(message)
+    
+    # 본문 내용 전송 (별도 메시지)
+    if post_content and post_content.get('full_text'):
+        text_content = post_content['full_text']
+        
+        # 슬랙 메시지 길이 제한 (3000자)
+        if len(text_content) > 2800:
+            text_content = text_content[:2800] + "\n\n... (이하 생략)"
+        
+        text_message = f"""📄 *인스타 복사용 본문*
+
+{text_content}
+
+━━━━━━━━━━━━━━━━━━
+💡 위 내용 전체를 복사해서 인스타에 붙여넣으세요!
+"""
+        send_slack(text_message)
     
     # 퀵액션 버튼
     send_slack_quick_actions(title=f"📱 {time_slot} 바로가기")
     
-    print(f"✅ {time_slot} 알림 완료!")
+    print(f"✅ {time_slot} 알림 + 본문 전송 완료!")
 
 
 # ========================================
