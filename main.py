@@ -620,43 +620,43 @@ def generate_and_schedule():
             try:
                 print(f"  🤖 AI 콘텐츠 생성 시작...")
                 content = generate_blog_post(store_key)
-            
-            if not content:
-                print(f"  ❌ [{i+1}] 콘텐츠 생성 실패! content is None")
-                continue
                 
-            print(f"  ✅ 콘텐츠 생성 완료: {content['title'][:30]}...")
-            
-            print(f"  📤 워드프레스 발행 시작...")
-            result = publish_to_wordpress(
-                content['title'],
-                content['content'],
-                content['tags'],
-                content['category'],
-                scheduled_dt_kst=scheduled_at
-            )
-            
-            if result.get('success'):
-                print(f"  ✅ [{i+1}] 워드프레스 발행 성공!")
-                post_data = {
-                    'store': store_info['name_kr'],
-                    'country': store_info['country'],
-                    'title': content['title'],
-                    'url': result['url'],
-                    'when': scheduled_at.strftime('%Y-%m-%d %H:%M'),
-                    'post_id': result['post_id'],
-                    'text_version': content.get('text_version', '')[:500],
-                    'hour': scheduled_at.hour,
-                    'full_text': content.get('text_version', '')
-                }
-                wp_results.append(post_data)
-                print(f"  💾 결과 저장 완료 (총 {len(wp_results)}개)")
+                if not content:
+                    print(f"  ❌ [{i+1}] 콘텐츠 생성 실패! content is None")
+                    continue
+                    
+                print(f"  ✅ 콘텐츠 생성 완료: {content['title'][:30]}...")
                 
-                # 발행 시간별로 본문 저장
-                save_post_content(scheduled_at.hour, post_data)
-            else:
-                print(f"  ❌ [{i+1}] 워드프레스 발행 실패!")
+                print(f"  📤 워드프레스 발행 시작...")
+                result = publish_to_wordpress(
+                    content['title'],
+                    content['content'],
+                    content['tags'],
+                    content['category'],
+                    scheduled_dt_kst=scheduled_at
+                )
                 
+                if result.get('success'):
+                    print(f"  ✅ [{i+1}] 워드프레스 발행 성공!")
+                    post_data = {
+                        'store': store_info['name_kr'],
+                        'country': store_info['country'],
+                        'title': content['title'],
+                        'url': result['url'],
+                        'when': scheduled_at.strftime('%Y-%m-%d %H:%M'),
+                        'post_id': result['post_id'],
+                        'text_version': content.get('text_version', '')[:500],
+                        'hour': scheduled_at.hour,
+                        'full_text': content.get('text_version', '')
+                    }
+                    wp_results.append(post_data)
+                    print(f"  💾 결과 저장 완료 (총 {len(wp_results)}개)")
+                    
+                    # 발행 시간별로 본문 저장
+                    save_post_content(scheduled_at.hour, post_data)
+                else:
+                    print(f"  ❌ [{i+1}] 워드프레스 발행 실패!")
+                    
             except Exception as e:
                 print(f"  ❌ [{i+1}] 에러 발생: {e}")
                 traceback.print_exc()
