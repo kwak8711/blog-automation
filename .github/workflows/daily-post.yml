@@ -2,8 +2,14 @@ name: Blog Automation (한국 + 일본 편의점)
 
 on:
   schedule:
-    # 매일 자정 00:00 (KST = UTC+9) → UTC 15:00에 콘텐츠 생성 및 예약발행
-    - cron: '0 15 * * *'
+    # 밤 11시 (23:00) - 1차 배치 (GS25, 세븐일레븐일본)
+    - cron: '0 14 * * *'  # KST 23:00 = UTC 14:00
+    
+    # 새벽 1시 (01:00) - 2차 배치 (CU, 패밀리마트)
+    - cron: '0 16 * * *'  # KST 01:00 = UTC 16:00
+    
+    # 새벽 3시 (03:00) - 3차 배치 (세븐일레븐한국, 로손)
+    - cron: '0 18 * * *'  # KST 03:00 = UTC 18:00
     
     # 아침 08:00 (KST) → UTC 23:00 (전날)에 알림 (한국 - GS25)
     - cron: '0 23 * * *'
@@ -57,7 +63,7 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
-        elif [ "${{ github.event.schedule }}" = "0 15 * * *" ]; then
+        elif [ "${{ github.event.schedule }}" = "0 14 * * *" ] || [ "${{ github.event.schedule }}" = "0 16 * * *" ] || [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
           echo "MODE=generate" >> $GITHUB_ENV
         else
           echo "MODE=notify" >> $GITHUB_ENV
