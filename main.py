@@ -9,7 +9,7 @@ from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import NewPost
 
 # ========================================
-# 환경변수
+# 🧁 환경변수
 # ========================================
 OPENAI_API_KEY       = os.environ.get('OPENAI_API_KEY')
 GROQ_API_KEY         = os.environ.get('GROQ_API_KEY')
@@ -31,9 +31,8 @@ POSTS_PER_DAY = 3
 # 한국 시간
 KST = ZoneInfo("Asia/Seoul")
 
-
 # ========================================
-# 편의점 매핑
+# 🏪 편의점 매핑
 # ========================================
 STORES = {
     "gs25": {
@@ -68,103 +67,100 @@ STORES = {
     },
 }
 
-
 # ========================================
-# 공통 유틸
+# 🍬 공통 유틸
 # ========================================
 def _ensure_dict(result):
     if isinstance(result, list):
         return result[0] if result else None
     return result
 
-
 # ========================================
-# HTML 템플릿
+# 🧁 워드프레스 HTML 템플릿 (귀염 ver.)
 # ========================================
 def build_wp_html(ai_result: dict, store_info: dict) -> str:
     store_name = store_info.get('name_kr', '편의점')
     title_kor = ai_result.get('title') or f"{store_name} 신상 제품 리뷰!"
-    main_content = ai_result.get('content') or ""
+    main_content = ai_result.get('content') or "<p>오늘 나온 신상들이에요 💖</p>"
 
-    # 해시태그는 인스타 복붙용이지만, 워드프레스에도 보여주자
-    tags_joined = "#편의점신상 #コンビニ新商品 #" + store_name.replace(" ", "") + " #편스타그램 #コンビニグルメ"
+    hashtags = (
+        "#편의점신상 #コンビニ新商品 "
+        f"#{store_name} "
+        "#편스타그램 #コンビニグルメ #오늘뭐먹지 #kconbini"
+    )
 
     html = f"""
-<div style="max-width: 800px;margin: 0 auto;font-family: 'Malgun Gothic', sans-serif">
+<div style="max-width: 820px;margin: 0 auto;font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif">
 
-  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);padding: 40px 30px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
-    <h1 style="color: white;font-size: 28px;margin: 0 0 15px 0;font-weight: bold">🛒 {title_kor}</h1>
-    <p style="color: rgba(255,255,255,0.9);font-size: 16px;margin: 0">コンビニ新商品レビュー 🇰🇷🇯🇵</p>
+  <!-- 상단 히어로 -->
+  <div style="background: radial-gradient(circle at top, #667eea 0%, #764ba2 45%, #ffffff 100%);padding: 42px 34px 34px;border-radius: 26px;margin-bottom: 36px;text-align: center;box-shadow: 0 12px 36px rgba(103,114,229,0.25)">
+    <p style="font-size: 13px;letter-spacing: 4px;color: rgba(255,255,255,0.7);margin: 0 0 10px 0;">K-CONBINI DAILY PICK</p>
+    <h1 style="color: #fff;font-size: 29px;margin: 0 0 10px 0;font-weight: 700">🛒 {title_kor}</h1>
+    <p style="color: rgba(255,255,255,0.88);font-size: 16px;margin: 0">コンビニ新商品レビュー 🇰🇷🇯🇵 | {store_name}</p>
   </div>
 
-  <div style="background: #f8f9ff;padding: 30px;border-radius: 15px;margin-bottom: 40px;border-left: 5px solid #667eea">
-    <p style="font-size: 17px;line-height: 1.8;margin: 0;color: #222;font-weight: 500">
-      <strong style="font-size: 19px">안녕하세요, 편스타그램 친구들!</strong> 오늘은 {store_name}에서 새롭게 나온 신상 제품들을 소개해드릴게요! 🎉
-      요즘 간편하게 즐길 수 있는 맛있는 간식들이 많아서 고르는 재미가 있더라구요 😋
+  <!-- 인사말 -->
+  <div style="background: #fff7fb;padding: 26px 24px;border-radius: 18px;margin-bottom: 28px;border: 1.4px solid rgba(252,95,168,0.25)">
+    <p style="font-size: 15.5px;line-height: 1.7;margin: 0;color: #222">
+      <strong style="font-size: 17px">안녕 편스타그램 친구들 💖</strong><br>
+      오늘은 <strong>{store_name}</strong>에서 꼭 먹어봐야 할 신상만 골라서 가져왔어!
+      아래에 한국어 설명이랑 일본어 요약 같이 넣어놨으니까, 한국/일본 팔로워한테 둘 다 보여줄 수 있어 ✨
     </p>
   </div>
 
-  <div style="background: white;padding: 25px 20px;border-radius: 15px;margin-bottom: 35px;box-shadow: 0 4px 16px rgba(0,0,0,0.03);border: 1px solid #f1f1f1">
+  <!-- AI가 생성한 본문 -->
+  <div style="background: #ffffff;padding: 26px 24px;border-radius: 18px;margin-bottom: 32px;box-shadow: 0 6px 18px rgba(0,0,0,0.03);border: 1px solid #f0f1ff">
     {main_content}
   </div>
 
-  <hr style="border: none;border-top: 3px solid #667eea;margin: 50px 0 30px 0">
-  <div style="background: linear-gradient(to right, #f8f9ff, #fff5f8);padding: 30px;border-radius: 15px;text-align: center">
-    <p style="margin: 0 0 15px 0;font-size: 16px;color: #667eea;font-weight: bold">📱 해시태그 / ハッシュタグ</p>
-    <p style="margin: 0;font-size: 15px;color: #667eea;line-height: 2">
-      {tags_joined}
-    </p>
+  <!-- 해시태그 -->
+  <div style="background: linear-gradient(120deg, #f8f9ff 0%, #fff1f4 100%);padding: 24px 20px;border-radius: 16px;text-align: center;border: 1px dashed rgba(118,75,162,0.3)">
+    <p style="margin: 0 0 10px 0;font-weight: 600;color: #6a4fbf;">📱 해시태그 / ハッシュタグ</p>
+    <p style="margin: 0;font-size: 14.5px;line-height: 2;color: #555">{hashtags}</p>
   </div>
 
 </div>
 """
     return html
 
-
 # ========================================
-# 인스타 캡션 만들기
+# 📱 인스타 캡션 만들기 (귀염 ver.)
 # ========================================
 def build_insta_caption(ai_result: dict, store_info: dict, scheduled_time_kst: datetime) -> str:
     store_name = store_info.get('name_kr', '편의점')
     title = ai_result.get('title') or f"{store_name} 신상 리뷰!"
-    # 인스타에서 바로 보이게 최대한 짧게
-    base = []
-    base.append(f"🛒 {title}")
-    base.append(f"{store_name} 신상 모아봤어 💛")
-    base.append("")
-    base.append("🇰🇷 + 🇯🇵 둘 다 올릴 수 있는 버전이야!")
-    base.append(f"⏰ 발행시간: {scheduled_time_kst.strftime('%Y-%m-%d %H:%M')}")
-    base.append("")
-    # 해시태그
+    date_line = scheduled_time_kst.strftime("%m/%d %H:%M")
     hashtags = [
-        "#편의점신상", "#コンビニ新商品",
-        f"#{store_name}",
-        "#편스타그램", "#コンビニグルメ",
-        "#신상품", "#오늘은이거", "#kconbini"
+        "#편의점신상", "#コンビニ新商品", f"#{store_name}",
+        "#편스타그램", "#コンビニグルメ", "#오늘뭐먹지", "#kconbini"
     ]
-    base.append(" ".join(hashtags))
-    return "\n".join(base)
-
+    cap = [
+        f"🛒 {title}",
+        f"{store_name} 오늘 나온 거 모아봤어 💖",
+        "",
+        f"⏰ 업로드 시간: {date_line} (KST)",
+        "🇰🇷 한국어도 OK / 🇯🇵 일본어도 OK",
+        "",
+        " ".join(hashtags)
+    ]
+    return "\n".join(cap)
 
 # ========================================
-# AI 호출 (AUTO)
+# 🤖 AI 호출 AUTO
 # ========================================
 def generate_with_auto(prompt):
     print("  🤖 AUTO 모드: Gemini → Groq → OpenAI")
 
-    # 1. Gemini
     res = call_gemini(prompt)
     res = _ensure_dict(res)
     if res:
         return res
 
-    # 2. Groq
     res = call_groq(prompt)
     res = _ensure_dict(res)
     if res:
         return res
 
-    # 3. OpenAI
     res = call_openai(prompt)
     res = _ensure_dict(res)
     if res:
@@ -172,37 +168,33 @@ def generate_with_auto(prompt):
 
     return None
 
-
 def call_gemini(prompt):
     if not GEMINI_API_KEY:
         return None
     try:
-        print("  🟢 Gemini 시도 중...")
+        print("  🟣 Gemini 시도...")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}"
         data = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": 0.9,
+                "temperature": 0.85,
                 "maxOutputTokens": 8192,
                 "responseMimeType": "application/json"
             }
         }
-        resp = requests.post(url, json=data, timeout=120)
-        resp.raise_for_status()
-        text = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        result = json.loads(text)
-        print("  ✅ Gemini 성공")
-        return result
+        r = requests.post(url, json=data, timeout=120)
+        r.raise_for_status()
+        text = r.json()['candidates'][0]['content']['parts'][0]['text']
+        return json.loads(text)
     except Exception as e:
-        print(f"  ⚠️ Gemini 실패: {str(e)[:120]}")
+        print("  ❌ Gemini 실패:", e)
         return None
-
 
 def call_groq(prompt):
     if not GROQ_API_KEY:
         return None
     try:
-        print("  🔵 Groq 시도 중...")
+        print("  🔵 Groq 시도...")
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -211,27 +203,24 @@ def call_groq(prompt):
         data = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "당신은 편의점 전문 블로거입니다. JSON으로만 답하세요."},
+                {"role": "system", "content": "당신은 한국/일본 편의점 신상 블로거입니다. JSON으로만 답하세요."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.9,
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_object"},
+            "temperature": 0.85,
         }
-        resp = requests.post(url, headers=headers, json=data, timeout=120)
-        resp.raise_for_status()
-        result = json.loads(resp.json()['choices'][0]['message']['content'])
-        print("  ✅ Groq 성공")
-        return result
+        r = requests.post(url, headers=headers, json=data, timeout=120)
+        r.raise_for_status()
+        return json.loads(r.json()['choices'][0]['message']['content'])
     except Exception as e:
-        print(f"  ⚠️ Groq 실패: {str(e)[:120]}")
+        print("  ❌ Groq 실패:", e)
         return None
-
 
 def call_openai(prompt):
     if not OPENAI_API_KEY:
         return None
     try:
-        print("  🟣 OpenAI 시도 중...")
+        print("  🟢 OpenAI 시도...")
         url = "https://api.openai.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {OPENAI_API_KEY}",
@@ -240,30 +229,25 @@ def call_openai(prompt):
         data = {
             "model": "gpt-4o-mini",
             "messages": [
-                {"role": "system", "content": "당신은 편의점 전문 블로거입니다. JSON으로만 답하세요."},
+                {"role": "system", "content": "당신은 한국/일본 편의점 신상 블로거입니다. JSON으로만 답하세요."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.9,
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_object"},
+            "temperature": 0.85,
         }
-        resp = requests.post(url, headers=headers, json=data, timeout=120)
-        resp.raise_for_status()
-        result = json.loads(resp.json()['choices'][0]['message']['content'])
-        print("  ✅ OpenAI 성공")
-        return result
+        r = requests.post(url, headers=headers, json=data, timeout=120)
+        r.raise_for_status()
+        return json.loads(r.json()['choices'][0]['message']['content'])
     except Exception as e:
-        print(f"  ⚠️ OpenAI 실패: {str(e)[:120]}")
+        print("  ❌ OpenAI 실패:", e)
         return None
 
-
 # ========================================
-# 워드프레스 발행
+# 🌐 워드프레스 발행
 # ========================================
 def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst=None):
     try:
-        print(f"  📤 워드프레스 발행 준비: {title[:30]}...")
         wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
-
         post = WordPressPost()
         post.title = title
         post.content = content
@@ -274,15 +258,14 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst=None):
         if scheduled_dt_kst:
             post.date = scheduled_dt_kst
         post_id = wp.call(NewPost(post))
-        print(f"  ✅ 워드프레스 발행 성공! ({post_id})")
+        print(f"  ✅ 워드프레스 발행 성공: {post_id}")
         return post_id
     except Exception as e:
-        print(f"  ❌ 워드프레스 발행 실패: {str(e)[:120]}")
+        print(f"  ❌ 워드프레스 발행 실패: {e}")
         return None
 
-
 # ========================================
-# 슬랙 보내기
+# 📨 슬랙 공통
 # ========================================
 def send_slack(payload: dict):
     if not SLACK_WEBHOOK_URL:
@@ -292,20 +275,21 @@ def send_slack(payload: dict):
     except Exception:
         pass
 
-
+# 개별 인스타 업로드 안내
 def send_slack_insta_reminder(caption: str, store_name: str, scheduled_dt: datetime):
-    """각 글마다: 인스타에 이거 올려! 하고 캡션 던져주는 메시지"""
-    text = f"📷 *인스타 업로드 알림*\n{store_name} 글이 {scheduled_dt.strftime('%Y-%m-%d %H:%M')} 에 예약되어 있어요.\n아래 캡션 복사해서 인스타에 올려줘 💖"
     blocks = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "📷 인스타 업로드 알림", "emoji": True}
+            "text": {"type": "plain_text", "text": "📷 인스타 올릴 시간 미리 알려줄게 💖", "emoji": True}
         },
         {
             "type": "section",
-            "text": {"type": "mrkdwn",
-                     "text": f"*{store_name}* 글이 *{scheduled_dt.strftime('%Y-%m-%d %H:%M')}* 에 발행돼요.\n👇 아래 캡션 복사해서 인스타에 올려줘요 💖"}
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{store_name}* 글이 *{scheduled_dt.strftime('%Y-%m-%d %H:%M')}* 에 올라가요.\n지금 이 캡션 복붙해서 인스타에 올리면 끝이야 😎"
+            }
         },
+        {"type": "divider"},
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"```{caption}```"}
@@ -313,27 +297,16 @@ def send_slack_insta_reminder(caption: str, store_name: str, scheduled_dt: datet
         {
             "type": "actions",
             "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "🟩 워드프레스"},
-                    "url": SLACK_LINK_WORDPRESS
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "📷 인스타"},
-                    "url": SLACK_LINK_INSTA
-                }
+                {"type": "button", "text": {"type": "plain_text", "text": "🟩 워드프레스"}, "url": SLACK_LINK_WORDPRESS},
+                {"type": "button", "text": {"type": "plain_text", "text": "📷 인스타"}, "url": SLACK_LINK_INSTA},
             ]
         }
     ]
-    send_slack({"text": text, "blocks": blocks})
+    send_slack({"text": "인스타 업로드 알림", "blocks": blocks})
 
-
+# 전체 요약
 def send_slack_summary(total, kr_count, jp_count, schedule_list):
-    """마지막 요약"""
-    if not SLACK_WEBHOOK_URL:
-        return
-    schedule_txt = "\n".join([f"- {title} → {dt.strftime('%Y-%m-%d %H:%M')}" for (title, dt) in schedule_list])
+    sch_text = "\n".join([f"• {title} → {dt.strftime('%Y-%m-%d %H:%M')}" for title, dt in schedule_list]) or "내일 예약이 없어요 😂"
     blocks = [
         {
             "type": "header",
@@ -348,91 +321,62 @@ def send_slack_summary(total, kr_count, jp_count, schedule_list):
         {
             "type": "section",
             "text": {"type": "mrkdwn",
-                     "text": "⏰ 내일 발행 시간은 아래와 같아요.\n" + schedule_txt}
+                     "text": "⏰ *발행 스케줄*\n" + sch_text}
         },
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn",
-                     "text": "📱 *바로가기*\n가고 싶은 채널을 선택해 주세요 💖"}
-        },
+        {"type": "section", "text": {"type": "mrkdwn", "text": "📱 *바로가기*\n원하는 채널 골라서 확인해줘 💖"}},
         {
             "type": "actions",
             "elements": [
-                {"type": "button", "text": {"type": "plain_text", "text": "🟩 워드프레스"}, "style": "primary",
-                 "url": SLACK_LINK_WORDPRESS},
+                {"type": "button", "text": {"type": "plain_text", "text": "🟩 워드프레스"}, "style": "primary", "url": SLACK_LINK_WORDPRESS},
                 {"type": "button", "text": {"type": "plain_text", "text": "📷 인스타"}, "url": SLACK_LINK_INSTA},
                 {"type": "button", "text": {"type": "plain_text", "text": "✍️ 네이버"}, "url": SLACK_LINK_NAVER},
             ]
         }
     ]
-    send_slack({"text": "편의점 예약발행 완료", "blocks": blocks})
+    send_slack({"text": "예약발행 완료", "blocks": blocks})
 
-
-# ========================================
-# 실제 글 생성
-# ========================================
-def generate_blog_post(store_key):
-    try:
-        store_info = STORES[store_key]
-        country = store_info['country']
-        name_kr = store_info['name_kr']
-        name_jp = store_info['name_jp']
-
-        print(f"  📝 {name_kr} ({'🇯🇵' if country == 'jp' else '🇰🇷'}) 블로그 글 생성 중...")
-
-        if country == 'kr':
-            prompt = f"""
-당신은 한국 편의점 신상 리뷰 블로거입니다.
-{store_info['name_kr']} 신상품 2~3개를 소개하는 블로그 글을 JSON으로 만들어주세요.
-"title","content","tags" 필드가 있어야 합니다.
-content는 HTML로, 한국어 + 일본어 요약이 들어가면 좋아요.
-"""
-        else:
-            prompt = f"""
-あなたは韓国コンビニの新商品を紹介するブロガーです。
-{store_info['name_jp']} の新商品を2〜3つ紹介する記事を JSON で作成してください。
-"title","content","tags" を含めてください。
-"""
-
-        result = generate_with_auto(prompt)
-        if not result:
-            return None
-
-        if isinstance(result, list):
-            if not result:
-                return None
-            result = result[0]
-
-        # 워드프레스용 HTML로 감싸기
-        html_content = build_wp_html(result, store_info)
-        result['content'] = html_content
-        result['category'] = store_info['category']
-        result['country'] = country
-        result['store_info'] = store_info
-
-        return result
-    except Exception as e:
-        print(f"  ❌ 글 생성 실패: {str(e)[:120]}")
-        traceback.print_exc()
-        return None
-
+# 예약발행 된 시각에 보내는 “발행됨!” 알림
+def send_slack_published(slot_label: str):
+    emojis = {
+        "morning": "🌅",
+        "noon": "🌤",
+        "evening": "🌙"
+    }
+    e = emojis.get(slot_label, "⏰")
+    text = f"{e} 예약된 편의점 글이 방금 발행됐어!\n인스타/네이버에도 같이 올려주면 좋아요 💖"
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"{e} 발행 완료! 인스타도 올려줘 💖", "emoji": True}
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "워드프레스에는 이미 올라갔어. 지금 인스타/네이버에도 올리면 타이밍 딱이야 ✨"}
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {"type": "button", "text": {"type": "plain_text", "text": "🟩 워드프레스 보기"}, "url": SLACK_LINK_WORDPRESS},
+                {"type": "button", "text": {"type": "plain_text", "text": "📷 인스타 가기"}, "url": SLACK_LINK_INSTA},
+            ]
+        }
+    ]
+    send_slack({"text": text, "blocks": blocks})
 
 # ========================================
-# 내일 9/12/18시 예약 시간 만들기
+# 🕘 내일 9/12/18시 슬롯 만들기
 # ========================================
 def get_tomorrow_slots_kst():
     now = datetime.now(KST)
-    tomorrow = (now + timedelta(days=1)).date()
-    slots = [
-        datetime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0, tzinfo=KST),
-        datetime(tomorrow.year, tomorrow.month, tomorrow.day, 12, 0, tzinfo=KST),
-        datetime(tomorrow.year, tomorrow.month, tomorrow.day, 18, 0, tzinfo=KST),
+    t = (now + timedelta(days=1)).date()
+    return [
+        datetime(t.year, t.month, t.day, 9, 0, tzinfo=KST),
+        datetime(t.year, t.month, t.day, 12, 0, tzinfo=KST),
+        datetime(t.year, t.month, t.day, 18, 0, tzinfo=KST),
     ]
-    return slots
-
 
 # ========================================
-# 메인 생성/발행
+# 🧠 글 생성 + 내일 예약 (00:00용)
 # ========================================
 def generate_and_schedule():
     print("=" * 60)
@@ -440,58 +384,86 @@ def generate_and_schedule():
     print("=" * 60)
 
     store_keys = list(STORES.keys())
-    slots = get_tomorrow_slots_kst()  # 내일 9/12/18
+    slots = get_tomorrow_slots_kst()
     success_count = 0
     kr_count = 0
     jp_count = 0
     schedule_list = []
 
-    # 앞에서부터 3개만
     for i, store_key in enumerate(store_keys[:POSTS_PER_DAY]):
-        scheduled_dt = slots[i]  # 0: 9시, 1: 12시, 2: 18시
-        post_data = generate_blog_post(store_key)
+        slot_dt = slots[i]
+        store_info = STORES[store_key]
+
+        # 1) AI 글 생성
+        if store_info['country'] == 'kr':
+            prompt = f"""
+한국 편의점 블로거처럼 JSON으로 글을 만들어줘.
+편의점: {store_info['name_kr']}
+요구: 제목(title), 본문(content=HTML), 태그(tags=[...])
+본문에는 제품 2~3개, 가격, 맛 포인트, 꿀조합, 일본어 요약 포함.
+"""
+        else:
+            prompt = f"""
+韓国コンビニの新商品を紹介するブロガーとしてJSONを作成してください。
+コンビニ: {store_info['name_jp']}
+"title","content","tags" を含めてください。
+"""
+
+        post_data = generate_with_auto(prompt)
         if not post_data:
-            print(f"❌ [{i+1}] {store_key} 생성 실패")
+            print(f"❌ {store_info['name_kr']} 생성 실패")
             continue
 
+        post_data = _ensure_dict(post_data)
+        html_content = build_wp_html(post_data, store_info)
+        post_data['content'] = html_content
+        post_data['category'] = store_info['category']
+
+        # 2) 워드프레스 예약
         post_id = publish_to_wordpress(
-            title=post_data['title'],
+            title=post_data.get('title', f"{store_info['name_kr']} 신상 리뷰"),
             content=post_data['content'],
             tags=post_data.get('tags', []),
             category=post_data.get('category', 'convenience'),
-            scheduled_dt_kst=scheduled_dt
+            scheduled_dt_kst=slot_dt
         )
 
         if post_id:
             success_count += 1
-            if post_data['country'] == 'kr':
+            if store_info['country'] == 'kr':
                 kr_count += 1
             else:
                 jp_count += 1
+            schedule_list.append((post_data.get('title', store_info['name_kr']), slot_dt))
 
-            schedule_list.append((post_data['title'], scheduled_dt))
-
-            # ✅ 인스타 복붙용 캡션 슬랙으로 개별 전송
-            insta_caption = build_insta_caption(post_data, post_data['store_info'], scheduled_dt)
-            send_slack_insta_reminder(insta_caption, post_data['store_info']['name_kr'], scheduled_dt)
+            # 3) 인스타 복붙 캡션 슬랙으로 보내기
+            insta_caption = build_insta_caption(post_data, store_info, slot_dt)
+            send_slack_insta_reminder(insta_caption, store_info['name_kr'], slot_dt)
 
         time.sleep(1)
 
-    # ✅ 마지막 전체 요약 슬랙
+    # 4) 마지막 요약
     send_slack_summary(success_count, kr_count, jp_count, schedule_list)
 
     print("=" * 60)
-    print(f"🎉 완료! 총 {success_count}개 예약!")
+    print(f"🎉 완료! 총 {success_count}개 예약했어!")
     print("=" * 60)
 
-
 # ========================================
-# main
+# 🧭 main
 # ========================================
 def main():
-    # 00:00에 이 파일이 돌도록 cron을 걸어두면
-    # 내일 9/12/18시 예약이 자동으로 생긴다.
-    generate_and_schedule()
+    mode = os.environ.get("MODE", "generate")
+    if mode == "generate":
+        # 00:00에 돌릴 것
+        generate_and_schedule()
+    elif mode == "remind":
+        # 09:00 / 12:00 / 18:00 에 돌릴 것
+        slot = os.environ.get("SLOT", "")  # morning / noon / evening
+        send_slack_published(slot)
+    else:
+        # 기본은 generate
+        generate_and_schedule()
 
 
 if __name__ == "__main__":
