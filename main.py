@@ -22,7 +22,7 @@ WORDPRESS_PASSWORD   = os.environ.get('WORDPRESS_PASSWORD')
 INSTAGRAM_PROFILE_URL = os.environ.get('INSTAGRAM_PROFILE_URL', 'https://instagram.com/')
 NAVER_BLOG_URL        = os.environ.get('NAVER_BLOG_URL', 'https://blog.naver.com/')
 
-POSTS_PER_DAY = 2  # 한 번에 2개씩 (시간 분산 전략)
+POSTS_PER_DAY = 1  # 1개씩 (Rate Limit 회피)
 
 KST = ZoneInfo('Asia/Seoul')
 
@@ -421,8 +421,8 @@ JSON 형식으로 답변:
             "response_format": {"type": "json_object"}
         }
         
-        # 재시도 로직 (최대 5번)
-        max_retries = 5
+        # 재시도 로직 (최대 2번) - 무료 플랜 최적화
+        max_retries = 2
         for attempt in range(max_retries):
             try:
                 print(f"  🔄 API 호출 시도 {attempt + 1}/{max_retries}...")
@@ -430,7 +430,7 @@ JSON 형식으로 답변:
                 
                 if response.status_code == 429:
                     if attempt < max_retries - 1:
-                        wait_time = 120 * (attempt + 1)  # 120초, 240초, 360초, 480초, 600초 (2분, 4분, 6분, 8분, 10분)
+                        wait_time = 180  # 3분 고정
                         print(f"  ⚠️ Rate Limit! {wait_time}초 ({wait_time//60}분) 대기 후 재시도...")
                         time.sleep(wait_time)
                         continue
@@ -445,7 +445,7 @@ JSON 형식으로 답변:
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"  ⚠️ 에러 발생: {e}. 재시도 중...")
-                    time.sleep(60)
+                    time.sleep(90)
                     continue
                 else:
                     print(f"  ❌ 최종 실패: {e}")
@@ -569,24 +569,21 @@ def generate_and_schedule():
     print(f"🚀 한일 편의점 콘텐츠 생성: {datetime.now(KST)}")
     print("=" * 60)
 
-    # 시간대별 발행 순서 결정
+    # 시간대별 발행 순서 결정 (1개씩)
     current_hour = datetime.now(KST).hour
     
     if current_hour == 23:  # 밤 11시
-        store_order = [
-            'GS25',              # 08시 (한국)
-            '세븐일레븐_일본',    # 09시 (일본)
-        ]
+        store_order = ['GS25']  # 08시
     elif current_hour == 1:  # 새벽 1시
-        store_order = [
-            'CU',                # 12시 (한국)
-            '패밀리마트',        # 13시 (일본)
-        ]
-    else:  # 새벽 3시 또는 기본
-        store_order = [
-            '세븐일레븐_한국',    # 20시 (한국)
-            '로손'               # 21시 (일본)
-        ]
+        store_order = ['세븐일레븐_일본']  # 09시
+    elif current_hour == 3:  # 새벽 3시
+        store_order = ['CU']  # 12시
+    elif current_hour == 5:  # 새벽 5시
+        store_order = ['패밀리마트']  # 13시
+    elif current_hour == 7:  # 아침 7시
+        store_order = ['세븐일레븐_한국']  # 20시
+    else:  # 새벽 9시 또는 기본
+        store_order = ['로손']  # 21시
     
     wp_results = []
 
@@ -661,8 +658,8 @@ def generate_and_schedule():
                 
             # 첫 번째 글 후에만 대기 (두 번째는 필요 없음)
             if i == 0 and POSTS_PER_DAY > 1:
-                print(f"  ⏱️ 60초 대기 중... (다음 글 준비)")
-                time.sleep(60)
+                print(f"  ⏱️ 180초 (3분) 대기 중... (분당 제한 회피)")
+                time.sleep(180)
     
     print(f"\n{'='*60}")
     print(f"🎉 반복 완료! 총 {len(wp_results)}개 글 발행 성공!")
