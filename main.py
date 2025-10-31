@@ -56,6 +56,10 @@ def call_gemini(prompt):
         result_text = response.json()['candidates'][0]['content']['parts'][0]['text']
         result = json.loads(result_text)
         
+        # Gemini가 배열로 리턴하면 첫번째 항목 사용
+        if isinstance(result, list):
+            result = result[0] if result else None
+        
         print("  ✅ Gemini 성공!")
         return result
         
@@ -88,6 +92,10 @@ def call_groq(prompt):
         response.raise_for_status()
         
         result = json.loads(response.json()['choices'][0]['message']['content'])
+        
+        # 배열로 리턴하면 첫번째 항목 사용
+        if isinstance(result, list):
+            result = result[0] if result else None
         
         print("  ✅ Groq 성공!")
         return result
@@ -124,6 +132,10 @@ def call_openai(prompt):
             
         response.raise_for_status()
         result = json.loads(response.json()['choices'][0]['message']['content'])
+        
+        # 배열로 리턴하면 첫번째 항목 사용
+        if isinstance(result, list):
+            result = result[0] if result else None
         
         print("  ✅ OpenAI 성공!")
         return result
