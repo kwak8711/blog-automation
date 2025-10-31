@@ -13,10 +13,15 @@ import time
 # 설정 (환경변수)
 # =========================
 OPENAI_API_KEY       = os.environ.get('OPENAI_API_KEY')
+GEMINI_API_KEY       = os.environ.get('GEMINI_API_KEY')
+GROQ_API_KEY         = os.environ.get('GROQ_API_KEY')  # Groq 추가!
 SLACK_WEBHOOK_URL    = os.environ.get('SLACK_WEBHOOK_URL')
 WORDPRESS_URL        = os.environ.get('WORDPRESS_URL')
 WORDPRESS_USERNAME   = os.environ.get('WORDPRESS_USERNAME')
 WORDPRESS_PASSWORD   = os.environ.get('WORDPRESS_PASSWORD')
+
+# AI 선택 (AUTO = 순환 사용, GROQ, GEMINI, OPENAI)
+AI_PROVIDER = os.environ.get('AI_PROVIDER', 'AUTO')
 
 # 버튼 링크용
 INSTAGRAM_PROFILE_URL = os.environ.get('INSTAGRAM_PROFILE_URL', 'https://instagram.com/')
@@ -179,6 +184,135 @@ def next_slots_korean_japanese(count=6):
 # ========================================
 # AI 콘텐츠 생성 (한국/일본 통합)
 # ========================================
+def generate_with_groq(prompt):
+    """Groq로 콘텐츠 생성 (초고속!)"""
+    try:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "llama-3.3-70b-versatile",  # 무료, 빠름, 품질 좋음
+            "messages": [
+                {"role": "system", "content": "당신은 편의점 전문 블로거입니다. 친근하고 재미있는 글을 씁니다. JSON 형식으로만 응답하세요."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.9,
+            "max_tokens": 4096,
+            "response_format": {"type": "json_object"}
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=90)
+        response.raise_for_status()
+        
+        return json.loads(response.json()['choices'][0]['message']['content'])
+        
+    except Exception as e:
+        print(f"  ❌ Groq 에러: {e}")
+        return None
+
+
+def generate_with_gemini(prompt):
+    """Gemini로 콘텐츠 생성"""
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}"
+        
+        data = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.9,
+                "topK": 40,
+                "topP": 0.95,
+                "maxOutputTokens": 8192,
+                "responseMimeType": "application/json"
+            }
+        }
+        
+        response = requests.post(url, json=data, timeout=90)
+        response.raise_for_status()
+        
+        result_text = response.json()['candidates'][0]['content']['parts'][0]['text']
+        return json.loads(result_text)
+        
+    except Exception as e:
+        print(f"  ❌ Gemini 에러: {e}")
+        return None
+
+
+def generate_with_openai(prompt):
+    """OpenAI로 콘텐츠 생성"""
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        
+        data = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "당신은 편의점 전문 블로거입니다. 친근하고 재미있는 글을 씁니다."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.9,
+            "response_format": {"type": "json_object"}
+        }
+        
+        # 재시도 로직 (최대 2번)
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                print(f"  🔄 API 호출 시도 {attempt + 1}/{max_retries}...")
+                response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=90)
+                
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = 180
+                        print(f"  ⚠️ Rate Limit! {wait_time}초 대기...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"  ❌ Rate Limit 초과!")
+                        return None
+                
+                response.raise_for_status()
+                return json.loads(response.json()['choices'][0]['message']['content'])
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"  ⚠️ 에러: {e}. 재시도...")
+                    time.sleep(90)
+                    continue
+                else:
+                    return None
+                    
+    except Exception as e:
+        print(f"  ❌ OpenAI 에러: {e}")
+        return None
+
+
+# AI 순환 카운터 (글마다 다른 AI 사용)
+_ai_counter = 0
+
+def get_next_ai():
+    """다음에 사용할 AI 선택 (순환)"""
+    global _ai_counter
+    
+    if AI_PROVIDER == 'GROQ':
+        return 'GROQ'
+    elif AI_PROVIDER == 'GEMINI':
+        return 'GEMINI'
+    elif AI_PROVIDER == 'OPENAI':
+        return 'OPENAI'
+    else:  # AUTO
+        # Groq → Gemini → Groq → Gemini 순환
+        ais = ['GROQ', 'GEMINI', 'GROQ', 'GEMINI', 'GROQ', 'GEMINI']
+        ai = ais[_ai_counter % len(ais)]
+        _ai_counter += 1
+        return ai
+
+
 def generate_blog_post(store_key):
     """AI로 블로그 글 생성 (한국/일본 자동 구분)"""
     try:
@@ -411,45 +545,20 @@ JSON 형식으로 답변:
 {{"title": "제목", "content": "HTML 본문 전체", "tags": ["일본편의점", "日本コンビニ", "{name_kr}", "{name_jp}", "일본여행", "日本旅行"]}}
 """
 
-        data = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "당신은 편의점 전문 블로거입니다. 친근하고 재미있는 글을 씁니다."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.9,
-            "response_format": {"type": "json_object"}
-        }
+        # AI 선택 및 호출
+        selected_ai = get_next_ai()
+        print(f"  🤖 사용 AI: {selected_ai}")
         
-        # 재시도 로직 (최대 2번) - 무료 플랜 최적화
-        max_retries = 2
-        for attempt in range(max_retries):
-            try:
-                print(f"  🔄 API 호출 시도 {attempt + 1}/{max_retries}...")
-                response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=90)
-                
-                if response.status_code == 429:
-                    if attempt < max_retries - 1:
-                        wait_time = 180  # 3분 고정
-                        print(f"  ⚠️ Rate Limit! {wait_time}초 ({wait_time//60}분) 대기 후 재시도...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"  ❌ Rate Limit 초과! 나중에 다시 시도하세요.")
-                        return None
-                
-                response.raise_for_status()
-                result = json.loads(response.json()['choices'][0]['message']['content'])
-                break  # 성공!
-                
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    print(f"  ⚠️ 에러 발생: {e}. 재시도 중...")
-                    time.sleep(90)
-                    continue
-                else:
-                    print(f"  ❌ 최종 실패: {e}")
-                    return None
+        if selected_ai == 'GROQ' and GROQ_API_KEY:
+            result = generate_with_groq(prompt)
+        elif selected_ai == 'GEMINI' and GEMINI_API_KEY:
+            result = generate_with_gemini(prompt)
+        else:
+            result = generate_with_openai(prompt)
+        
+        if not result:
+            print(f"  ❌ {selected_ai} 실패!")
+            return None
 
         # 카테고리 추가
         result['category'] = store_info['category']
