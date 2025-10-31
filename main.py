@@ -6,7 +6,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from wordpress_xmlrpc import Client, WordPressPost
-from wordpress_xmlrpc.methods.posts import NewPost, EditPost
+# 💡 [수정] NewPost 외에 GetPost를 추가로 import 합니다.
+from wordpress_xmlrpc.methods.posts import NewPost, EditPost, GetPost
 from wordpress_xmlrpc.methods.taxonomies import GetTerms
 import time
 from typing import Optional, Dict, List, Any
@@ -46,7 +47,7 @@ STORES = {
 }
 
 # =========================
-# 💡 [수정] 콘텐츠 정리 함수 추가: 워드프레스 포맷 개선
+# 콘텐츠 정리 함수 (이전 수정사항 유지)
 # =========================
 
 def clean_content_for_wordpress(content: str) -> str:
@@ -58,25 +59,17 @@ def clean_content_for_wordpress(content: str) -> str:
         return ""
     
     # 1. 이미 HTML 태그가 포함되어 있다면 (AI가 잘 만들었다고 가정) 그대로 반환합니다.
-    #    (이 경우 AI가 넣은 줄바꿈이 문제가 될 수 있으므로, \n을 <br>로 치환하는 것은 고려해볼 수 있으나,
-    #     워드프레스 자체 필터가 처리하도록 둡니다.)
     if re.search(r'<(p|h[1-6]|div|ul|ol|table|br)', content, re.IGNORECASE):
-        # AI가 HTML을 사용한 경우, 불필요한 \r 처리만 하고 반환
         return content.replace('\r\n', '\n')
     
     # 2. 순수 텍스트인 경우: 이중 줄바꿈(\n\n)을 단락(<p>)으로 변환합니다.
-    
-    # 먼저 모든 \r\n을 \n으로 통일
     content = content.replace('\r\n', '\n')
-    
-    # 이중 줄바꿈으로 단락 분리
     paragraphs = content.split('\n\n')
     
     html_content = ""
     for p in paragraphs:
         p_trimmed = p.strip()
         if p_trimmed:
-            # 단락 내부의 단일 줄바꿈은 <br>로 변환하여 강제 줄바꿈을 허용
             p_with_br = p_trimmed.replace('\n', '<br>')
             html_content += f"<p>{p_with_br}</p>\n"
             
@@ -84,37 +77,11 @@ def clean_content_for_wordpress(content: str) -> str:
 
 
 # =========================
-# 기타 도우미 함수 (워드프레스 관련)
+# 워드프레스 발행 함수 (URL 획득 로직 강화)
 # =========================
 
-def get_or_create_term_id(wp: Client, taxonomy: str, term_name: str) -> Optional[int]:
-    """카테고리/태그가 없으면 생성하고 ID를 반환합니다."""
-    try:
-        # 먼저 기존 항목 검색
-        terms = wp.call(GetTerms(taxonomy))
-        
-        existing_term = next((t for t in terms if t.name == term_name), None)
-        
-        if existing_term:
-            return existing_term.id
-        
-        # 없으면 생성
-        # (생성 코드는 wp.call(NewTerm...)을 사용해야 하나, 이 API는 별도의 권한이 필요하여 
-        #  여기서는 'post.terms_names'를 사용하여 자동 생성에 의존합니다.
-        #  다만, XML-RPC는 NewTerm을 지원하므로, 권한이 있다면 아래처럼 사용 가능합니다.)
-        # from wordpress_xmlrpc.methods.taxonomies import NewTerm
-        # new_term = wp.call(NewTerm(taxonomy, term_name))
-        # return new_term.id
-        
-        # XML-RPC 클라이언트가 'terms_names'를 사용하면 없는 경우 자동으로 생성해 줌
-        return None # terms_names를 사용할 경우 ID를 미리 알 필요는 없습니다.
-        
-    except Exception as e:
-        print(f"❌ Term 처리 에러 ({taxonomy}/{term_name}): {e}")
-        return None
-
 def publish_post_to_wordpress(post_data: Dict[str, Any]) -> Optional[str]:
-    """워드프레스에 글을 발행합니다."""
+    """워드프레스에 글을 발행하고 정확한 URL을 반환합니다."""
     if not (WORDPRESS_URL and WORDPRESS_USERNAME and WORDPRESS_PASSWORD):
         print("⚠️ 워드프레스 설정(URL/Username/Password)이 누락되었습니다.")
         return None
@@ -125,40 +92,39 @@ def publish_post_to_wordpress(post_data: Dict[str, Any]) -> Optional[str]:
         
         post = WordPressPost()
         post.title = post_data['title']
-        
-        # 💡 [수정 적용] AI가 생성한 콘텐츠를 정리하여 post.content에 할당
         post.content = clean_content_for_wordpress(post_data['content'])
-        
-        post.post_status = 'publish'  # 'draft' 대신 'publish'로 바로 발행
+        post.post_status = 'publish'
         post.terms_names = {
             'category': [post_data['category'], post_data['country_category']],
             'post_tag': [f"{post_data['store_name']} 신상", post_data['country_category']]
         }
-
-        # 메타 정보 (선택 사항)
         post.custom_fields = []
         if post_data.get('instagram_keyword'):
-             # 인스타그램 키워드는 나중에 인스타 발행 시 활용할 수 있습니다.
              post.custom_fields.append({'key': 'instagram_keyword', 'value': post_data['instagram_keyword']})
-
-        # 이미 발행된 글인지 확인 (제목 기반) -> 간단한 중복 발행 방지 로직
-        # 실제 환경에서는 커스텀 필드나 post_id 저장을 사용해야 하지만, 여기서는 발행 시도만 합니다.
 
         print(f"✍️ 글 발행 시도: {post.title[:50]}...")
         post_id = wp.call(NewPost(post))
         
-        # 썸네일 이미지 업로드 (Pexels 관련 로직은 생략. 필요하다면 추가해야 함)
+        # 💡 [핵심 수정]: NewPost 후 GetPost를 호출하여 정확한 permalink를 가져옵니다.
+        published_post = wp.call(GetPost(post_id))
         
-        post_url = f"{WORDPRESS_URL}?p={post_id}" # Simple permalink
-        print(f"✅ 발행 성공! Post ID: {post_id}")
-        return post_url
+        if published_post and published_post.link:
+            post_url = published_post.link
+            print(f"✅ 발행 성공! Post ID: {post_id}, URL: {post_url}")
+            return post_url
+        else:
+            print(f"⚠️ 발행은 성공했으나 포스트 링크를 가져오지 못했습니다. ID: {post_id}")
+            # 최악의 경우, 임시로 기본 permalink 구조를 반환
+            return f"{WORDPRESS_URL}?p={post_id}"
 
     except Exception as e:
         print(f"❌ 워드프레스 발행 중 에러 발생: {e}")
         traceback.print_exc()
         return None
 
-# (나머지 main.py의 함수들: send_slack, load_post_content 등)
+# =========================
+# 기타 도우미 함수 (그대로 유지)
+# =========================
 
 def send_slack(message: str):
     """Slack으로 알림을 보냅니다."""
@@ -182,19 +148,9 @@ def send_slack(message: str):
 def load_post_content(hour: int) -> Optional[Dict[str, Any]]:
     """시간대에 맞는 발행할 글을 JSON 파일에서 불러옵니다. (임시 로직)"""
     # 실제 시스템에서는 DB나 파일 시스템에서 예약된 글을 조회해야 합니다.
-    # 여기서는 임시 JSON 파일을 읽는다고 가정합니다.
+    # 여기서는 임시 JSON 파일을 읽는다고 가정하고 더미 데이터를 반환합니다.
     try:
-        # 예를 들어, main_crawl.py에서 생성된 파일을 로드한다고 가정
-        # 실제 구현에서는 시간대에 맞는 글을 DB에서 가져와야 함
-        temp_path = f"/tmp/scheduled_post_{hour}.json"
-        
-        # 테스트를 위해 현재 시간에 가장 가까운/최근에 생성된 파일을 찾거나
-        # 또는 전체 크롤링 결과 JSON에서 해당 시간대의 글을 찾도록 로직을 구현해야 합니다.
-        
-        # 여기서는 테스트용 더미 데이터를 반환합니다.
         print(f"🔍 발행 대기 글 로드 중... (시간대: {hour}시)")
-        
-        # 실제 데이터 로직은 생략하고 테스트용 더미 반환
         return {
             'store_key': 'GS25', 
             'title': f'[{hour}시 발행] GS25 신상 대박! - 쫀득한 마카롱 리뷰',
@@ -217,7 +173,6 @@ def main():
     current_time_kst = datetime.now(KST)
     current_hour = current_time_kst.hour
     
-    # 08, 09, 12, 13, 20, 21시에만 실행하도록 설정
     time_slot_map = {
         8: ("아침 8시", "GS25", "kr"),
         9: ("아침 9시", "세븐일레븐", "jp"),
@@ -244,7 +199,7 @@ def main():
     # 2. 워드프레스 발행
     post_url = publish_post_to_wordpress(post_data)
     
-    # post_data에 발행 URL 업데이트
+    # post_data에 발행 URL 업데이트 (이제 정확한 URL이 할당됨)
     if post_url:
         post_data['url'] = post_url
         
@@ -263,7 +218,6 @@ def main():
     # 인스타 본문용 추가 알림 (post_data['full_text']가 있다고 가정)
     if post_data.get('full_text'):
         text_content = post_data['full_text']
-        # 슬랙 메시지 길이 제한을 고려하여 텍스트 길이를 조정
         if len(text_content) > 2800:
             text_content = text_content[:2800] + "\n\n... (이하 생략)"
         
@@ -275,3 +229,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```eof
