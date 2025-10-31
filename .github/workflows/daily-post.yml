@@ -62,11 +62,18 @@ jobs:
       id: set-mode
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # 수동 실행: 사용자가 선택한 모드 사용
           echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
-        elif [ "${{ github.event.schedule }}" = "0 14 * * *" ] || [ "${{ github.event.schedule }}" = "0 16 * * *" ] || [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
-          echo "MODE=generate" >> $GITHUB_ENV
+        elif [ "${{ github.event_name }}" = "schedule" ]; then
+          # 스케줄 실행: 시간에 따라 모드 결정
+          if [ "${{ github.event.schedule }}" = "0 14 * * *" ] || [ "${{ github.event.schedule }}" = "0 16 * * *" ] || [ "${{ github.event.schedule }}" = "0 18 * * *" ]; then
+            echo "MODE=generate" >> $GITHUB_ENV
+          else
+            echo "MODE=notify" >> $GITHUB_ENV
+          fi
         else
-          echo "MODE=notify" >> $GITHUB_ENV
+          # 기타: generate 모드
+          echo "MODE=generate" >> $GITHUB_ENV
         fi
     
     - name: 한일 편의점 자동화 실행
