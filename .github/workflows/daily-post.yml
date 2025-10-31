@@ -85,11 +85,14 @@ jobs:
     - name: 한일 편의점 자동화 실행
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
         WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
         WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
         INSTAGRAM_PROFILE_URL: ${{ secrets.INSTAGRAM_PROFILE_URL }}
         NAVER_BLOG_URL: ${{ secrets.NAVER_BLOG_URL }}
+        AI_PROVIDER: AUTO
         MODE: ${{ env.MODE }}
       run: python main.py
