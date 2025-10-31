@@ -102,52 +102,109 @@ def wrap_jp_box(text: str) -> str:
 
 def ensure_bilingual_content(html: str, store_name: str) -> str:
     """
-    AI가 준 content가 난잡해도 우리가 강제로
-    [제목] → [한국어 박스] → [일본어 박스]
-    패턴으로 만들어주는 함수
+    AI가 아무렇게나 써도,
+    1) 제목(h2/h3) → 파란 언더라인
+    2) 가격 박스(없으면 숨김)
+    3) 한국어 설명
+    4) 꿀조합 박스
+    5) 별점
+    6) 일본어 요약 박스
+    이 순서로 ‘편의점 신상 카드’처럼 보여주게 한다.
     """
     html = strip_images(html)
 
-    # h2/h3 단위로 쪼갠다
-    # re.split 으로 태그를 남겨놓고 split
-    tokens = re.split(r'(<h2.*?>|<h3.*?>)', html, flags=re.IGNORECASE)
+    # ① 먼저 상품 단위로 쪼갠다 (h2/h3 기준)
+    chunks = re.split(r'(<h2.*?>|<h3.*?>)', html, flags=re.IGNORECASE)
     out = []
 
-    i = 0
-    while i < len(tokens):
-        token = tokens[i]
-
-        # 제목일 때
-        if re.match(r'<h2.*?>', token or "", flags=re.IGNORECASE) or re.match(r'<h3.*?>', token or "", flags=re.IGNORECASE):
-            # 실제 제목 텍스트 추출
-            title_tag = token
-            i += 1
-            if i < len(tokens):
-                body = tokens[i]
-            else:
-                body = ""
-
-            # 제목 텍스트만
-            title_text = re.sub(r'<.*?>', '', title_tag).strip()
-
-            out.append(
-                f"<h2 style=\"font-size:24px;margin:30px 0 14px 0;font-weight:700;color:#2f3542;\">{title_text}</h2>"
-            )
-
-            kr, jp = split_kr_jp(body)
-            if kr:
-                out.append(wrap_kr_box(kr))
-            if jp:
-                out.append(wrap_jp_box(jp))
+    def render_card(title_text, body_html):
+        # 본문에서 한국어/일본어/가격/꿀조합/별점 뽑기
+        # 가격 찾기
+        price_match = re.search(r'(가격|price)\s*[:：]\s*([0-9,]+원?|[0-9,]+)', body_html, flags=re.IGNORECASE)
+        price_html = ""
+        if price_match:
+            price_val = price_match.group(2)
+            price_html = f"""
+            <div style="background:#ffeceb;border-radius:14px;padding:10px 14px;margin:10px 0 16px 0;
+                        display:inline-flex;gap:8px;align-items:center;">
+              <span style="font-size:19px;">💰</span>
+              <span style="font-size:15px;font-weight:600;color:#d94b42;">가격 : {price_val}</span>
+            </div>
+            """
+            # 본문에서 가격 문장 제거
+            body_html_local = re.sub(r'(가격|price)\s*[:：].*', '', body_html)
         else:
-            # 그냥 텍스트 블록
-            if token.strip():
-                kr, jp = split_kr_jp(token)
-                if kr:
-                    out.append(wrap_kr_box(kr))
-                if jp:
-                    out.append(wrap_jp_box(jp))
-        i += 1
+            body_html_local = body_html
+
+        # 꿀조합 찾기
+        honey_match = re.search(r'(꿀조합|추천조합|추천)\s*[:：]?(.*)', body_html_local)
+        honey_html = ""
+        if honey_match:
+            honey_text = honey_match.group(2).strip()
+            if honey_text:
+                honey_html = f"""
+                <div style="background:#e8f7e8;border-radius:14px;padding:10px 14px;margin:14px 0 12px 0;">
+                  <span style="font-weight:600;">🍯 꿀조합:</span> {honey_text}
+                </div>
+                """
+                body_html_local = re.sub(r'(꿀조합|추천조합|추천)\s*[:：]?.*', '', body_html_local)
+
+        # 별점 기본값
+        stars_html = """
+        <div style="margin:8px 0 14px 0;font-size:14px;">
+          <span style="font-weight:600;">별점:</span> ⭐⭐⭐⭐☆
+        </div>
+        """
+
+        # 한국어/일본어 분리
+        kr_part, jp_part = split_kr_jp(body_html_local)
+
+        kr_box = f"""
+        <div style="margin-bottom:6px;font-size:14.3px;line-height:1.7;color:#222;">
+          {kr_part.strip()}
+        </div>
+        """
+
+        jp_box = ""
+        if jp_part.strip():
+            jp_box = f"""
+            <div style="background:#ffe4d1;border:1px solid rgba(255,144,93,0.35);
+                        padding:13px 16px 11px;border-radius:16px;margin:0 0 14px 0;
+                        line-height:1.6;color:#4d3422;font-size:13.5px;">
+              <div style="font-weight:600;margin-bottom:4px;display:flex;gap:6px;align-items:center;">
+                🇯🇵 日本語要約
+              </div>
+              {jp_part.strip()}
+            </div>
+            """
+
+        return f"""
+        <div style="background:#fff;border:1px solid #edf1ff;border-radius:18px;padding:18px 20px 16px;margin-bottom:20px;box-shadow:0 3px 12px rgba(0,0,0,0.03);">
+          <h2 style="font-size:22px;margin:0 0 12px 0;font-weight:700;color:#345;">{title_text}</h2>
+          <div style="height:3px;background:#5876ff;margin:0 0 16px 0;border-radius:999px;"></div>
+          {price_html}
+          {kr_box}
+          {honey_html}
+          {stars_html}
+          {jp_box}
+        </div>
+        """
+
+    # chunks 는 [앞부분, <h2..>, 뒷부분, <h2..>, ...] 이런 구조
+    current_title = None
+    for part in chunks:
+        if re.match(r'<h2.*?>', part or "", flags=re.IGNORECASE) or re.match(r'<h3.*?>', part or "", flags=re.IGNORECASE):
+            # 제목 태그에서 텍스트만
+            current_title = re.sub(r'<.*?>', '', part).strip()
+        else:
+            if current_title:
+                out.append(render_card(current_title, part))
+                current_title = None
+            else:
+                # 제목 없이 온 덩어리도 카드로
+                text = part.strip()
+                if text:
+                    out.append(render_card(f"{store_name} 신상", text))
 
     return "".join(out)
 
