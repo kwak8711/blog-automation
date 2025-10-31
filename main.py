@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from wordpress_xmlrpc import Client, WordPressPost
-# 💡 [수정] NewPost 외에 GetPost를 추가로 import 합니다.
+# 💡 NewPost 외에 GetPost를 추가로 import 합니다.
 from wordpress_xmlrpc.methods.posts import NewPost, EditPost, GetPost
 from wordpress_xmlrpc.methods.taxonomies import GetTerms
 import time
@@ -35,7 +35,7 @@ POSTS_PER_DAY = 1 # 1개씩
 KST = ZoneInfo('Asia/Seoul')
 
 # =========================
-# 편의점 설정
+# 편의점 설정 (유지)
 # =========================
 STORES = {
     'GS25': {'country': 'kr', 'name_kr': 'GS25', 'name_jp': '', 'category': '한국편의점'},
@@ -47,7 +47,7 @@ STORES = {
 }
 
 # =========================
-# 콘텐츠 정리 함수 (이전 수정사항 유지)
+# 콘텐츠 정리 함수 (유지)
 # =========================
 
 def clean_content_for_wordpress(content: str) -> str:
@@ -87,7 +87,8 @@ def publish_post_to_wordpress(post_data: Dict[str, Any]) -> Optional[str]:
         return None
 
     try:
-        print(f"🌐 워드프레스 접속 중: {WORDPRESS_URL}")
+        # XML-RPC 클라이언트 초기화 시, WORDPRESS_URL은 블로그의 루트 URL이어야 합니다.
+        print(f"🌐 워드프레스 접속 시도: {WORDPRESS_URL}")
         wp = Client(WORDPRESS_URL, WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
         
         post = WordPressPost()
@@ -105,25 +106,34 @@ def publish_post_to_wordpress(post_data: Dict[str, Any]) -> Optional[str]:
         print(f"✍️ 글 발행 시도: {post.title[:50]}...")
         post_id = wp.call(NewPost(post))
         
-        # 💡 [핵심 수정]: NewPost 후 GetPost를 호출하여 정확한 permalink를 가져옵니다.
+        # 발행 후 ID로 포스트 객체를 다시 가져옵니다.
+        print(f"🔎 발행된 Post ID {post_id}로 정확한 URL 조회 중...")
         published_post = wp.call(GetPost(post_id))
         
+        post_url = None
         if published_post and published_post.link:
             post_url = published_post.link
-            print(f"✅ 발행 성공! Post ID: {post_id}, URL: {post_url}")
-            return post_url
+            print(f"✅ URL 조회 성공: {post_url}")
         else:
-            print(f"⚠️ 발행은 성공했으나 포스트 링크를 가져오지 못했습니다. ID: {post_id}")
-            # 최악의 경우, 임시로 기본 permalink 구조를 반환
-            return f"{WORDPRESS_URL}?p={post_id}"
+            # GetPost 실패 또는 link가 없는 경우
+            # 이 경우 워드프레스 설정(퍼머링크)에 따라 기본 URL을 구성합니다.
+            post_url = f"{WORDPRESS_URL}?p={post_id}"
+            print(f"⚠️ GetPost 실패 또는 link 필드 누락. 기본 URL 구성: {post_url}")
+            
+        if post_url == WORDPRESS_URL or post_url == WORDPRESS_URL + '/':
+             # 여전히 메인 페이지 링크라면, 문제가 있음을 명시합니다.
+             print(f"❌ 생성된 링크가 메인 URL과 동일합니다. 워드프레스 퍼머링크 설정을 확인하세요.")
+             
+        return post_url
 
     except Exception as e:
-        print(f"❌ 워드프레스 발행 중 에러 발생: {e}")
+        # 접속 실패나 XML-RPC 에러 시
+        print(f"❌ 워드프레스 발행/접속 중 에러 발생: {e}")
         traceback.print_exc()
         return None
 
 # =========================
-# 기타 도우미 함수 (그대로 유지)
+# 기타 도우미 함수 (유지)
 # =========================
 
 def send_slack(message: str):
@@ -151,6 +161,7 @@ def load_post_content(hour: int) -> Optional[Dict[str, Any]]:
     # 여기서는 임시 JSON 파일을 읽는다고 가정하고 더미 데이터를 반환합니다.
     try:
         print(f"🔍 발행 대기 글 로드 중... (시간대: {hour}시)")
+        # 더미 데이터에서는 'url' 필드를 제거했습니다. 이제 발행 시점에 정확히 생성됩니다.
         return {
             'store_key': 'GS25', 
             'title': f'[{hour}시 발행] GS25 신상 대박! - 쫀득한 마카롱 리뷰',
@@ -158,7 +169,6 @@ def load_post_content(hour: int) -> Optional[Dict[str, Any]]:
             'category': '디저트',
             'country_category': '한국편의점',
             'store_name': 'GS25',
-            'url': 'https://yourblog.com/post-link', # 더미 URL
             'full_text': '인스타 본문용 전체 텍스트입니다.'
         }
     except Exception as e:
@@ -166,7 +176,7 @@ def load_post_content(hour: int) -> Optional[Dict[str, Any]]:
         return None
 
 # =========================
-# 메인 실행 함수
+# 메인 실행 함수 (유지)
 # =========================
 def main():
     """현재 시간에 맞춰 예약된 글을 발행하고 Slack 알림을 보냅니다."""
@@ -229,4 +239,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```eof
