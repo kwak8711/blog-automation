@@ -12,22 +12,22 @@ import time
 # =========================
 # 설정 (환경변수)
 # =========================
-OPENAI_API_KEY       = os.environ.get('OPENAI_API_KEY')
-GEMINI_API_KEY       = os.environ.get('GEMINI_API_KEY')
-GROQ_API_KEY         = os.environ.get('GROQ_API_KEY')
-SLACK_WEBHOOK_URL    = os.environ.get('SLACK_WEBHOOK_URL')
-WORDPRESS_URL        = os.environ.get('WORDPRESS_URL')
-WORDPRESS_USERNAME   = os.environ.get('WORDPRESS_USERNAME')
-WORDPRESS_PASSWORD   = os.environ.get('WORDPRESS_PASSWORD')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
+WORDPRESS_URL = os.environ.get('WORDPRESS_URL')
+WORDPRESS_USERNAME = os.environ.get('WORDPRESS_USERNAME')
+WORDPRESS_PASSWORD = os.environ.get('WORDPRESS_PASSWORD')
 
 # AI 선택 (AUTO = Gemini→Groq→OpenAI 순)
 AI_PROVIDER = os.environ.get('AI_PROVIDER', 'AUTO')
 
 # 버튼 링크용
 INSTAGRAM_PROFILE_URL = os.environ.get('INSTAGRAM_PROFILE_URL', 'https://instagram.com/')
-NAVER_BLOG_URL        = os.environ.get('NAVER_BLOG_URL', 'https://blog.naver.com/')
+NAVER_BLOG_URL = os.environ.get('NAVER_BLOG_URL', 'https://blog.naver.com/')
 
-POSTS_PER_DAY = 1  # 1개씩
+POSTS_PER_DAY = 1 # 1개씩
 
 KST = ZoneInfo('Asia/Seoul')
 
@@ -225,7 +225,7 @@ def call_openai(prompt):
         }
         
         response = requests.post("https://api.openai.com/v1/chat/completions", 
-                               headers=headers, json=data, timeout=120)
+                                 headers=headers, json=data, timeout=120)
         
         if response.status_code == 429:
             print("  ⚠️ OpenAI Rate Limit!")
@@ -275,8 +275,60 @@ def generate_blog_post(store_key):
         country = store_info['country']
         name_kr = store_info['name_kr']
         name_jp = store_info['name_jp']
+        currency = store_info['currency'] # 통화 단위 추가
         
         print(f"  📝 {name_kr} {'🇯🇵' if country == 'jp' else '🇰🇷'} 블로그 글 생성 중...")
+        
+        # --- HTML DESIGN INSTRUCTION START ---
+        # AI가 깔끔한 워드프레스 카드형 디자인을 생성하도록 안내하는 템플릿
+        HTML_DESIGN_INSTRUCTION = f"""
+        [필수 디자인 지침 - 워드프레스 카드형 디자인 적용]
+        1.  **반드시** 아래의 CSS 스타일 블록 전체를 HTML 본문(`<div class="container">` 이전) 맨 앞에 `<style>` 태그로 포함해야 합니다. (호버 효과, 반응형 스타일을 워드프레스 포스트에 삽입하기 위해 필요)
+        2.  본문 전체를 `<div class="container">`로 감싸야 합니다.
+        3.  각 제품 리뷰는 **반드시** `<div class="product-card">`로 감싸고, `<h2 class="product-title">`을 사용해야 합니다.
+        4.  아래 제시된 인라인 스타일(`style="..."`)과 클래스(`class="..."`)를 철저히 복사하여 사용하세요.
+
+        --- CSS STYLE BLOCK (AI가 HTML 본문 시작 시점에 복사해야 함) ---
+        <style>
+            .container {{
+                max-width: 800px;
+                margin: 0 auto;
+                font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', Roboto, sans-serif;
+                box-shadow: 0 0 40px rgba(0, 0, 0, 0.05);
+                background: white;
+                border-radius: 25px;
+                padding: 20px;
+            }}
+            .product-card {{
+                padding: 35px;
+                border-radius: 20px;
+                margin-bottom: 35px;
+                box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+                border: 2px solid #f0f0f0;
+                background: white;
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+            }}
+            .product-card:hover {{
+                transform: translateY(-5px);
+                box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+            }}
+            .product-title {{
+                color: #667eea;
+                font-size: 26px;
+                margin: 0 0 20px 0;
+                font-weight: bold;
+                border-bottom: 3px solid #667eea;
+                padding-bottom: 15px;
+            }}
+            @media (max-width: 820px) {{
+                .container {{ margin: 0 10px; padding: 15px; }}
+                h1 {{ font-size: 24px !important; }}
+                .product-title {{ font-size: 22px !important; }}
+            }}
+        </style>
+        --- HTML STRUCTURAL GUIDELINES END ---
+        """
+        # --- HTML DESIGN INSTRUCTION END ---
         
         # 프롬프트 생성 (간단하게)
         if country == 'kr':
@@ -284,9 +336,9 @@ def generate_blog_post(store_key):
 
 요구사항:
 - 제목: 클릭하고 싶은 제목 (이모지 포함, 30자 이내)
-- 본문: HTML 형식, 1200-1800자
-- 각 제품: 제품명, 가격(원), 맛 후기, 꿀조합, 별점, 일본어 요약
-- 친근한 MZ 스타일
+- 본문: HTML 형식. HTML 본문은 {HTML_DESIGN_INSTRUCTION} 지침에 따라 생성해야 합니다.
+- 각 제품: 제품명, 가격({currency}), 맛 후기, 꿀조합, 별점(⭐⭐⭐⭐), 일본어 요약(🇯🇵 日本語要約 블록 사용)
+- 친근한 MZ 스타일.
 
 JSON 형식:
 {{"title": "제목", "content": "HTML 본문", "tags": ["편의점신상", "{name_kr}", "꿀조합"]}}
@@ -296,9 +348,9 @@ JSON 형식:
 
 요구사항:
 - 제목: 클릭하고 싶은 제목 (한일 병기)
-- 본문: HTML 형식, 1200-1800자
-- 각 제품: 제품명(한일), 가격(엔), 리뷰, 일본 문화 팁, 별점
-- 여행 가이드 느낌
+- 본문: HTML 형식. HTML 본문은 {HTML_DESIGN_INSTRUCTION} 지침에 따라 생성해야 합니다.
+- 각 제품: 제품명(한일 병기), 가격({currency}), 상세 리뷰(한국어), 일본 문화 팁(일본어), 별점(⭐⭐⭐⭐)
+- 여행 가이드 느낌. 한국 독자를 위한 친절하고 상세한 설명 포함.
 
 JSON 형식:
 {{"title": "제목", "content": "HTML 본문", "tags": ["일본편의점", "{name_kr}", "{name_jp}"]}}
@@ -501,8 +553,8 @@ def generate_and_schedule():
     for r in wp_results:
         flag = '🇯🇵' if r['country'] == 'jp' else '🇰🇷'
         summary += f"\n{flag} *{r['store']}* - {r['when']}"
-        summary += f"\n   📝 {r['title'][:50]}..."
-        summary += f"\n   🔗 {r['url']}\n"
+        summary += f"\n  📝 {r['title'][:50]}..."
+        summary += f"\n  🔗 {r['url']}\n"
     
     summary += """
 ━━━━━━━━━━━━━━━━━━
