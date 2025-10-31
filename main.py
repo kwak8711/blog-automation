@@ -179,23 +179,142 @@ def generate_blog_post(store_info):
 
 요구사항:
 - 제목: 클릭하고 싶은 제목 (이모지 포함)
-- 본문: HTML 형식, 1200자 이상
-- 각 제품: 제품명, 가격(원), 맛 후기, 별점
-- 친근한 말투
+- 본문: 아래 HTML 디자인 그대로 사용
+- 각 제품: 제품명, 가격(원), 맛 후기, 꿀조합, 별점, 일본어 요약
+- 친근한 MZ 말투
+
+HTML 디자인:
+<div style="max-width: 800px;margin: 0 auto;font-family: 'Malgun Gothic', sans-serif">
+
+<!-- 헤더 -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);padding: 40px 30px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<h1 style="color: white;font-size: 28px;margin: 0 0 15px 0;font-weight: bold">🛒 {name} 신상 제품 리뷰!</h1>
+<p style="color: rgba(255,255,255,0.9);font-size: 16px;margin: 0">コンビニ新商品レビュー 🇰🇷🇯🇵</p>
+</div>
+
+<!-- 인사말 -->
+<div style="background: #f8f9ff;padding: 30px;border-radius: 15px;margin-bottom: 40px;border-left: 5px solid #667eea">
+<p style="font-size: 17px;line-height: 1.8;margin: 0;color: #222;font-weight: 500">
+<strong style="font-size: 19px">안녕하세요, 편스타그램 친구들!</strong> 오늘은 {name}에서 새롭게 나온 신상 제품들을 소개해드릴게요! 🎉 [인사말 추가]
+</p>
+</div>
+
+<!-- 제품 1 -->
+<div style="background: white;padding: 35px;border-radius: 20px;margin-bottom: 35px;box-shadow: 0 5px 20px rgba(0,0,0,0.08);border: 2px solid #f0f0f0">
+<h2 style="color: #667eea;font-size: 26px;margin: 0 0 20px 0;font-weight: bold;border-bottom: 3px solid #667eea;padding-bottom: 15px">1. [제품명] [이모지]</h2>
+
+<div style="background: #fff5f5;padding: 20px;border-radius: 12px;margin-bottom: 20px">
+<p style="font-size: 18px;margin: 0;color: #e63946"><strong style="font-size: 22px">💰 가격: [가격]원</strong></p>
+</div>
+
+<p style="font-size: 16px;line-height: 1.9;color: #222;margin-bottom: 20px;font-weight: 500">
+[맛 후기 - 식감, 맛, 향 구체적으로]
+</p>
+
+<div style="background: #e8f5e9;padding: 18px;border-radius: 10px;margin-bottom: 20px">
+<p style="font-size: 16px;margin: 0;color: #2e7d32"><strong>🍯 꿀조합:</strong> [꿀조합 설명]</p>
+</div>
+
+<p style="font-size: 17px;margin-bottom: 20px"><strong>별점:</strong> ⭐⭐⭐⭐⭐</p>
+
+<div style="background: linear-gradient(to right, #fff3e0, #ffe0b2);padding: 20px;border-radius: 12px;border-left: 4px solid #ff9800">
+<p style="margin: 0 0 8px 0;font-size: 15px;color: #e65100"><strong>🇯🇵 日本語要約</strong></p>
+<p style="font-size: 14px;line-height: 1.7;color: #555;margin: 0">[일본어 요약 3-4줄]</p>
+</div>
+</div>
+
+<!-- 제품 2 동일 구조 -->
+
+<!-- 마무리 -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);padding: 35px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<p style="color: white;font-size: 18px;line-height: 1.8;margin: 0">
+오늘 소개해드린 {name} 신상 제품들, 어떠셨나요? 가성비도 좋고 맛있으니 꼭 한 번 드셔보세요! 여러분의 편의점 꿀조합도 댓글로 남겨주세요! 😊<br><br>
+<span style="font-size: 16px;opacity: 0.9">今日紹介した{name}の新商品、ぜひ試してみてください！🎌</span>
+</p>
+</div>
+
+<!-- 해시태그 -->
+<hr style="border: none;border-top: 3px solid #667eea;margin: 50px 0 30px 0">
+
+<div style="background: linear-gradient(to right, #f8f9ff, #fff5f8);padding: 30px;border-radius: 15px;text-align: center">
+<p style="margin: 0 0 15px 0;font-size: 16px;color: #667eea;font-weight: bold">📱 해시태그 / ハッシュタグ</p>
+<p style="margin: 0;font-size: 15px;color: #667eea;line-height: 2">
+#편의점신상 #コンビニ新商品 #{name} #꿀조합 #美味しい組み合わせ #편스타그램 #コンビニグルメ #MZ추천 #韓国コンビニ #편의점디저트 #コンビニデザート
+</p>
+</div>
+
+</div>
 
 JSON 형식:
-{{"title": "제목", "content": "HTML 본문", "tags": ["편의점신상", "{name}"]}}
+{{"title": "제목", "content": "위 HTML 전체", "tags": ["편의점신상", "{name}", "꿀조합"]}}
 """
         else:
             prompt = f"""당신은 일본 편의점 블로거입니다. {name} 신상 제품 2개를 소개하세요.
 
 요구사항:
 - 제목: 클릭하고 싶은 제목 (한일 병기)
-- 본문: HTML 형식, 1200자 이상
-- 각 제품: 제품명, 가격(엔), 리뷰, 별점
+- 본문: 아래 HTML 디자인 그대로 사용
+- 각 제품: 제품명(한일), 가격(엔), 리뷰, 일본 문화 팁, 별점
+
+HTML 디자인:
+<div style="max-width: 800px;margin: 0 auto;font-family: 'Malgun Gothic', sans-serif">
+
+<!-- 헤더 -->
+<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);padding: 40px 30px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<h1 style="color: white;font-size: 28px;margin: 0 0 15px 0;font-weight: bold">🇯🇵 {name} 신상 제품 리뷰!</h1>
+<p style="color: rgba(255,255,255,0.9);font-size: 18px;margin: 0">{store_info.get('name_jp', name)} 新商品レビュー</p>
+</div>
+
+<!-- 인사말 -->
+<div style="background: #fff5f5;padding: 30px;border-radius: 15px;margin-bottom: 40px;border-left: 5px solid #ff6b6b">
+<p style="font-size: 17px;line-height: 1.8;margin: 0;color: #222;font-weight: 500">
+<strong style="font-size: 19px">안녕하세요! 일본 편의점 탐험대입니다!</strong> 🇯🇵 오늘은 일본 {name}의 신상 제품을 소개해드릴게요! [인사말 추가]
+</p>
+</div>
+
+<!-- 제품 1 -->
+<div style="background: white;padding: 35px;border-radius: 20px;margin-bottom: 35px;box-shadow: 0 5px 20px rgba(0,0,0,0.08);border: 2px solid #f0f0f0">
+<h2 style="color: #ff6b6b;font-size: 26px;margin: 0 0 20px 0;font-weight: bold;border-bottom: 3px solid #ff6b6b;padding-bottom: 15px">1. [제품명] ([일본어]) [이모지]</h2>
+
+<div style="background: #fff5f5;padding: 20px;border-radius: 12px;margin-bottom: 20px">
+<p style="font-size: 18px;margin: 0;color: #e63946"><strong style="font-size: 22px">💴 가격: [가격]엔</strong></p>
+</div>
+
+<p style="font-size: 16px;line-height: 1.9;color: #222;margin-bottom: 20px;font-weight: 500">
+[맛 후기 - 한국과 비교하며 설명]
+</p>
+
+<div style="background: #fff3cd;padding: 18px;border-radius: 10px;margin-bottom: 20px;border-left: 4px solid #ffc107">
+<p style="font-size: 16px;margin: 0;color: #856404"><strong>🎌 일본 팁:</strong> [일본 편의점 문화 팁]</p>
+</div>
+
+<p style="font-size: 17px;margin-bottom: 20px"><strong>별점:</strong> ⭐⭐⭐⭐⭐</p>
+</div>
+
+<!-- 제품 2 동일 구조 -->
+
+<!-- 마무리 -->
+<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);padding: 35px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<p style="color: white;font-size: 18px;line-height: 1.8;margin: 0">
+일본 여행 가시면 {name} 꼭 들러보세요! 한국에서는 맛볼 수 없는 특별한 제품들이 가득해요! 🎌<br><br>
+<span style="font-size: 16px;opacity: 0.9">日本旅行の際は、ぜひ{store_info.get('name_jp', name)}に立ち寄ってみてください！</span>
+</p>
+</div>
+
+<!-- 해시태그 -->
+<hr style="border: none;border-top: 3px solid #ff6b6b;margin: 50px 0 30px 0">
+
+<div style="background: linear-gradient(to right, #fff5f5, #ffe0e0);padding: 30px;border-radius: 15px;text-align: center">
+<p style="margin: 0 0 15px 0;font-size: 16px;color: #ff6b6b;font-weight: bold">📱 해시태그 / ハッシュタグ</p>
+<p style="margin: 0;font-size: 15px;color: #ff6b6b;line-height: 2">
+#일본편의점 #日本コンビニ #{name} #{store_info.get('name_jp', name)} #일본여행 #日本旅行 #편의점투어 #コンビニ巡り
+</p>
+</div>
+
+</div>
 
 JSON 형식:
-{{"title": "제목", "content": "HTML 본문", "tags": ["일본편의점", "{name}"]}}
+{{"title": "제목", "content": "위 HTML 전체", "tags": ["일본편의점", "{name}"]}}
 """
         
         result = generate_with_auto(prompt)
