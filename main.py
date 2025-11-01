@@ -722,3 +722,73 @@ if __name__ == "__main__" and os.environ.get("TEST_COUCHMALLOW") == "1":
     img = get_couchmallow_image_for_post()
     print("generated:", img)
 
+
+
+# ======================================================================
+# 🟣 6) 워드프레스 발행 시 Couchmallow 이미지 자동 첨부 패치
+#  - 위쪽 원본 publish_to_wordpress()는 손대지 않고 아래에서 감싼다.
+#  - assets/ 안에 있는 이미지 → 워터마크 → 워드프레스에 업로드 → 본문 맨 위에 <img> 넣기
+#  - 이미지 업로드가 실패하면 그냥 원래 함수 호출해서 글만 올림.
+# ======================================================================
+from wordpress_xmlrpc.methods import media
+from wordpress_xmlrpc.compat import xmlrpc_client
+
+# 1. 원래 함수 백업해두기
+_original_publish_to_wordpress = publish_to_wordpress  # ← 위에서 정의된 원본
+
+def _upload_image_to_wp(wp_client: Client, image_path: str) -> dict | None:
+    """로컬 이미지를 워드프레스에 media로 올리고 결과 dict를 리턴"""
+    try:
+        with open(image_path, 'rb') as img:
+            data = {
+                'name': os.path.basename(image_path),
+                'type': 'image/png',
+                'bits': xmlrpc_client.Binary(img.read()),
+            }
+        res = wp_client.call(media.UploadFile(data))
+        # res 예시: {'id': 123, 'file': '...', 'url': 'https://...png', 'type': 'image/png'}
+        return res
+    except Exception as e:
+        print(f"  ⚠️ 워드프레스 이미지 업로드 실패: {e}")
+        return None
+
+def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
+    """
+    기존 publish_to_wordpress 를 덮어쓰는 래퍼.
+    1) 쿠치멜로 이미지 뽑기
+    2) 워터마크 입힌 파일을 WP에 업로드
+    3) 성공하면 본문 맨 위에 <img ...> 한 줄 붙이고
+    4) 원래 함수(_original_publish_to_wordpress) 호출
+    """
+    # 1) 쿠치멜로 이미지 하나 뽑기
+    img_path = get_couchmallow_image_for_post()
+    if not img_path:
+        # 그냥 원래대로
+        return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
+
+    # 2) 워드프레스 클라이언트 생성 (원래 함수 코드랑 동일하게 맞춰줌)
+    if not WORDPRESS_URL or not WORDPRESS_USERNAME or not WORDPRESS_PASSWORD:
+        print("  ⚠️ 워드프레스 정보가 없어서 이미지 없이 발행합니다.")
+        return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
+
+    try:
+        wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
+
+        # 3) 이미지 먼저 올리기
+        img_res = _upload_image_to_wp(wp, img_path)
+        if img_res and 'url' in img_res:
+            img_url = img_res['url']
+            print(f"  🖼️ Couchmallow 이미지 업로드 성공: {img_url}")
+
+            # 4) 본문 맨 위에 이미지 한 줄 추가
+            #    스타일은 심플하게, 공주님 톤 맞춰서 여백 조금
+            img_html = f'<p><img src="{img_url}" alt="Couchmallow" style="max-width:360px;border-radius:18px;margin-bottom:24px;"></p>\n'
+            content = img_html + content
+        else:
+            print("  ⚠️ 이미지 업로드 결과에 url이 없어서 이미지 없이 발행합니다.")
+
+    except Exception as e:
+        print(f"  ⚠️ 이미지 업로드 과정에서 에러. 이미지 없이 발행할게요: {e}")
+
+    # 5) 결국엔 원래 발행 함수 호출
+    return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
