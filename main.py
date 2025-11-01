@@ -651,7 +651,7 @@ def pick_couchmallow_image() -> str | None:
 
 # 3) 워터마크 찍기
 def add_watermark(input_path: str,
-                  text: str = "복제금지 / couchmallow",
+                  text: str = "Do not copy/ couchmallow",
                   opacity: int = 60) -> str:
     """
     input_path 이미지를 열어서 오른쪽 아래에 연한 워터마크를 찍고
