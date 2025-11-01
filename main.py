@@ -751,3 +751,134 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
     # 최종적으로는 원래 함수 호출
     return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
 
+
+# ======================================================================
+# 🟣 Couchmallow 이미지 자동첨부 + 워터마크 (ADD-ON)
+#  - 기존 publish_to_wordpress는 건드리지 않고, 아래에서 싸서 한 번 더 씀
+#  - assets/ 안에 있는 캐릭터 PNG를 랜덤으로 1개 골라 워터마크 찍고 업로드
+#  - 워터마크: "복제금지 / couchmallow / DO NOT COPY" (한·영 둘 다)
+#  - Pillow 필요: requirements.txt 에 pillow 추가
+# ======================================================================
+import os
+import random
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _PIL_AVAILABLE = True
+except Exception:
+    _PIL_AVAILABLE = False
+
+# 준비: 원래 함수 백업 (위에 publish_to_wordpress가 이미 정의돼 있어야 함)
+_original_publish_to_wordpress = publish_to_wordpress  # 👈 이 줄이 핵심
+
+# 에셋 폴더
+COUCHMALLOW_ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+
+# 공주님이 깃허브에 올려둔 파일명들
+COUCHMALLOW_CANDIDATES = [
+    "Couchmallow_AM_01_360_ivory.png",
+    "Couchmallow_AM_04_360_ivory.png",
+    "Couchmallow_AM_07_360_ivory.png",
+]
+
+def _pick_couchmallow_image():
+    exists = []
+    for name in COUCHMALLOW_CANDIDATES:
+        path = os.path.join(COUCHMALLOW_ASSETS_DIR, name)
+        if os.path.exists(path):
+            exists.append(path)
+    if not exists:
+        return None
+    return random.choice(exists)
+
+def _add_watermark(input_path: str,
+                   text: str = "복제금지 / couchmallow / DO NOT COPY",
+                   opacity: int = 64) -> str:
+    """원본 위에 연보라 워터마크 살짝 넣어서 새 파일로 저장"""
+    if not _PIL_AVAILABLE:
+        return input_path
+
+    out_dir = os.path.join(COUCHMALLOW_ASSETS_DIR, "_out")
+    os.makedirs(out_dir, exist_ok=True)
+
+    base = Image.open(input_path).convert("RGBA")
+    w, h = base.size
+
+    layer = Image.new("RGBA", base.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(layer)
+
+    # 폰트
+    try:
+        font = ImageFont.truetype("arial.ttf", int(h * 0.035))
+    except Exception:
+        font = ImageFont.load_default()
+
+    text_w, text_h = draw.textsize(text, font=font)
+
+    margin = int(min(w, h) * 0.03)
+    x = w - text_w - margin
+    y = h - text_h - margin
+
+    # 연보라 + 투명
+    draw.text((x, y), text, font=font, fill=(94, 73, 133, opacity))
+
+    out = Image.alpha_composite(base, layer)
+
+    base_name = os.path.basename(input_path)
+    name_wo_ext, _ = os.path.splitext(base_name)
+    out_path = os.path.join(out_dir, f"{name_wo_ext}_wm.png")
+    out.convert("RGB").save(out_path, "PNG")
+    return out_path
+
+def _upload_image_to_wp(wp_client, img_path):
+    """워드프레스로 로컬 파일 업로드"""
+    from wordpress_xmlrpc import WordPressMedia
+    from wordpress_xmlrpc.methods import media
+
+    with open(img_path, "rb") as f:
+        data = {
+            'name': os.path.basename(img_path),
+            'type': 'image/png',
+        }
+        bits = f.read()
+
+    upload = media.UploadFile({'name': data['name'], 'type': data['type'], 'bits': bits})
+    res = wp_client.call(upload)
+    return res  # res['url'] 에 업로드된 주소가 들어옴
+
+def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
+    """원래 publish_to_wordpress를 감싸서 이미지 하나 끼워넣는 래퍼"""
+    # 1) 에셋에서 이미지 하나 뽑기
+    img_path = _pick_couchmallow_image()
+    if img_path:
+        # 2) 워터마크 넣기
+        img_path = _add_watermark(img_path)
+    else:
+        print("⚠️ Couchmallow 이미지가 없어서 텍스트만 발행합니다.")
+
+    # 3) 업로드 시도
+    if img_path and WORDPRESS_URL and WORDPRESS_USERNAME and WORDPRESS_PASSWORD:
+        try:
+            from wordpress_xmlrpc import Client
+            wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
+            img_res = _upload_image_to_wp(wp, img_path)
+
+            if img_res and "url" in img_res:
+                img_url = img_res["url"]
+                print(f"🖼 Couchmallow 이미지 업로드 성공: {img_url}")
+
+                # 👉 여기서 본문 맨 위에 이미지 태그를 ‘강제로’ 끼워넣는다
+                img_html = (
+                    f'<p style="text-align:center;margin-bottom:28px">'
+                    f'<img src="{img_url}" alt="Couchmallow" '
+                    f'style="max-width:360px;border-radius:18px;box-shadow:0 4px 16px rgba(0,0,0,.06);" />'
+                    f'</p>\n'
+                )
+                content = img_html + content
+            else:
+                print("⚠️ 이미지 업로드 결과에 url 이 없어서 이미지 없이 발행합니다.")
+        except Exception as e:
+            print(f"⚠️ 이미지 업로드 중 오류 발생, 이미지 없이 발행합니다: {e}")
+
+    # 4) 마지막에 원래 함수로 넘김
+    return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
