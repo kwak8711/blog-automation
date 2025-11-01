@@ -369,9 +369,22 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
 # =========================
 def send_slack(message):
     try:
+        print(f"  📤 슬랙 전송 시도...")
+        print(f"  📝 메시지 길이: {len(message)} 자")
+        
         response = requests.post(SLACK_WEBHOOK_URL, json={'text': message}, timeout=10)
-        return response.status_code == 200
-    except:
+        
+        print(f"  📊 응답 코드: {response.status_code}")
+        
+        if response.status_code == 200:
+            print(f"  ✅ 슬랙 전송 성공!")
+            return True
+        else:
+            print(f"  ❌ 슬랙 전송 실패: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"  ❌ 슬랙 전송 에러: {e}")
         return False
 
 
