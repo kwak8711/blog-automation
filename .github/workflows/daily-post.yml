@@ -24,6 +24,7 @@ on:
         options:
           - generate  # 3개 예약발행
           - notify    # 발행 알림만
+          - test      # 테스트 모드 (환경변수 체크만)
 
 jobs:
   run-automation:
@@ -43,7 +44,81 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
+      - name: 환경 변수 체크 (디버깅)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
+          WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+          WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+        run: |
+          echo "🔍 환경 변수 체크"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # 필수 체크
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "❌ GEMINI_API_KEY 없음!"
+            MISSING=1
+          else
+            echo "✅ GEMINI_API_KEY 있음 (${#GEMINI_API_KEY}자)"
+          fi
+          
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "❌ SLACK_WEBHOOK_URL 없음!"
+            MISSING=1
+          else
+            echo "✅ SLACK_WEBHOOK_URL 있음"
+          fi
+          
+          if [ -z "$WORDPRESS_URL" ]; then
+            echo "❌ WORDPRESS_URL 없음!"
+            MISSING=1
+          else
+            echo "✅ WORDPRESS_URL: $WORDPRESS_URL"
+          fi
+          
+          if [ -z "$WORDPRESS_USERNAME" ]; then
+            echo "❌ WORDPRESS_USERNAME 없음!"
+            MISSING=1
+          else
+            echo "✅ WORDPRESS_USERNAME: $WORDPRESS_USERNAME"
+          fi
+          
+          if [ -z "$WORDPRESS_PASSWORD" ]; then
+            echo "❌ WORDPRESS_PASSWORD 없음!"
+            MISSING=1
+          else
+            echo "✅ WORDPRESS_PASSWORD 있음 (${#WORDPRESS_PASSWORD}자)"
+          fi
+          
+          # 선택 체크
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "⚪ GROQ_API_KEY 없음 (선택사항)"
+          else
+            echo "✅ GROQ_API_KEY 있음"
+          fi
+          
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "⚪ OPENAI_API_KEY 없음 (선택사항)"
+          else
+            echo "✅ OPENAI_API_KEY 있음"
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          if [ ! -z "$MISSING" ]; then
+            echo ""
+            echo "❌ 필수 환경 변수가 누락되었습니다!"
+            echo "   Settings → Secrets and variables → Actions 에서 추가하세요."
+            exit 1
+          fi
+          
+          echo "✅ 모든 필수 환경 변수 확인 완료!"
+      
       - name: 실행
+        if: github.event.inputs.mode != 'test'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -88,3 +163,20 @@ jobs:
           echo "🔥 최종 MODE=$MODE"
           export MODE=$MODE
           python main.py
+      
+      - name: 실행 결과
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if [ $? -eq 0 ]; then
+            echo "✅ 워크플로우 성공!"
+          else
+            echo "❌ 워크플로우 실패!"
+            echo ""
+            echo "문제 해결:"
+            echo "1. 위의 에러 로그 확인"
+            echo "2. GitHub Secrets 재확인"
+            echo "3. TROUBLESHOOTING.md 참고"
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
