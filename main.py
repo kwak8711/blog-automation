@@ -21,6 +21,34 @@ MODE = os.environ.get('MODE', 'generate')
 
 KST = ZoneInfo('Asia/Seoul')
 
+# 환경변수 체크
+print("=" * 60)
+print("🔑 환경변수 체크")
+print("=" * 60)
+print(f"GEMINI_API_KEY: {'✅ 설정됨' if GEMINI_API_KEY else '❌ 없음'}")
+print(f"GROQ_API_KEY: {'✅ 설정됨' if GROQ_API_KEY else '⚠️ 없음 (선택)'}")
+print(f"OPENAI_API_KEY: {'✅ 설정됨' if OPENAI_API_KEY else '⚠️ 없음 (선택)'}")
+print(f"SLACK_WEBHOOK_URL: {'✅ 설정됨' if SLACK_WEBHOOK_URL else '❌ 없음'}")
+print(f"WORDPRESS_URL: {'✅ 설정됨' if WORDPRESS_URL else '❌ 없음'}")
+print(f"WORDPRESS_USERNAME: {'✅ 설정됨' if WORDPRESS_USERNAME else '❌ 없음'}")
+print(f"WORDPRESS_PASSWORD: {'✅ 설정됨' if WORDPRESS_PASSWORD else '❌ 없음'}")
+print("=" * 60)
+print()
+
+# 필수 환경변수 체크
+if not SLACK_WEBHOOK_URL:
+    print("❌ SLACK_WEBHOOK_URL이 설정되지 않았습니다!")
+    print("   GitHub Secrets에 추가해주세요.")
+    
+if not WORDPRESS_URL or not WORDPRESS_USERNAME or not WORDPRESS_PASSWORD:
+    print("❌ 워드프레스 정보가 설정되지 않았습니다!")
+    print("   WORDPRESS_URL, WORDPRESS_USERNAME, WORDPRESS_PASSWORD를 확인하세요.")
+
+if not GEMINI_API_KEY and not GROQ_API_KEY and not OPENAI_API_KEY:
+    print("❌ AI API 키가 하나도 설정되지 않았습니다!")
+    print("   최소한 GEMINI_API_KEY는 설정해야 합니다.")
+    exit(1)
+
 # =========================
 # 편의점 정보
 # =========================
@@ -338,8 +366,14 @@ JSON 형식:
 # 워드프레스 발행
 # =========================
 def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
+    if not WORDPRESS_URL or not WORDPRESS_USERNAME or not WORDPRESS_PASSWORD:
+        print("  ⚠️ 워드프레스 정보가 없어서 발행 건너뜀")
+        return {'success': False, 'error': '워드프레스 정보 없음'}
+        
     try:
         print(f"  📤 발행 준비: {title[:30]}...")
+        print(f"  🔗 워드프레스 URL: {WORDPRESS_URL}")
+        print(f"  👤 사용자: {WORDPRESS_USERNAME}")
         
         wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
         
@@ -353,38 +387,54 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
         post.date = dt_utc.replace(tzinfo=None)
         post.date_gmt = dt_utc.replace(tzinfo=None)
         
+        print(f"  📅 예약 시간: {scheduled_dt_kst.strftime('%Y-%m-%d %H:%M')} (KST)")
+        print(f"  📅 예약 시간: {dt_utc.strftime('%Y-%m-%d %H:%M')} (UTC)")
+        
         post_id = wp.call(NewPost(post))
         url = f"{WORDPRESS_URL}/?p={post_id}"
         
-        print(f"  ✅ 예약발행 성공: {url}")
+        print(f"  ✅ 예약발행 성공!")
+        print(f"  🆔 Post ID: {post_id}")
+        print(f"  🔗 URL: {url}")
+        
         return {'success': True, 'url': url, 'post_id': post_id, 'hour': scheduled_dt_kst.hour}
         
     except Exception as e:
         print(f"  ❌ 발행 실패: {e}")
-        return {'success': False}
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
 
 
 # =========================
 # 슬랙 알림
 # =========================
 def send_slack(message):
+    if not SLACK_WEBHOOK_URL:
+        print("  ⚠️ SLACK_WEBHOOK_URL이 없어서 슬랙 전송 건너뜀")
+        return False
+        
     try:
         print(f"  📤 슬랙 전송 시도...")
         print(f"  📝 메시지 길이: {len(message)} 자")
+        print(f"  🔗 Webhook URL: {SLACK_WEBHOOK_URL[:50]}...")
         
         response = requests.post(SLACK_WEBHOOK_URL, json={'text': message}, timeout=10)
         
         print(f"  📊 응답 코드: {response.status_code}")
+        print(f"  📄 응답 내용: {response.text[:200]}")
         
         if response.status_code == 200:
             print(f"  ✅ 슬랙 전송 성공!")
             return True
         else:
-            print(f"  ❌ 슬랙 전송 실패: {response.text}")
+            print(f"  ❌ 슬랙 전송 실패!")
             return False
             
     except Exception as e:
         print(f"  ❌ 슬랙 전송 에러: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
