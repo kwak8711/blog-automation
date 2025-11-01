@@ -54,23 +54,37 @@ jobs:
           WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
           TZ: "Asia/Seoul"
         run: |
+          # 한국 시간 출력
+          current_time=$(date '+%Y-%m-%d %H:%M:%S %Z')
           hour=$(date +%H)
-          echo "⏰ KST hour: $hour"
+          echo "⏰ 현재 시간: $current_time"
+          echo "⏰ 시간(hour): $hour"
           
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             MODE="${{ github.event.inputs.mode }}"
+            echo "🖱️ 수동 실행: MODE=$MODE"
           else
             # 스케줄 실행: 시간에 따라 자동 결정
+            echo "⏰ 스케줄 실행: hour=$hour"
+            
             if [ "$hour" = "23" ]; then
               MODE="generate"
-            elif [ "$hour" = "09" ] || [ "$hour" = "12" ] || [ "$hour" = "18" ]; then
+              echo "🌙 밤 11시 → 생성 모드"
+            elif [ "$hour" = "09" ]; then
               MODE="notify"
+              echo "🌅 아침 9시 → 알림 모드"
+            elif [ "$hour" = "12" ]; then
+              MODE="notify"
+              echo "🌞 점심 12시 → 알림 모드"
+            elif [ "$hour" = "18" ]; then
+              MODE="notify"
+              echo "🌆 저녁 6시 → 알림 모드"
             else
-              echo "⚠️ 실행 시간이 아닙니다."
+              echo "⚠️ 실행 시간이 아닙니다 (현재: $hour시)"
               exit 0
             fi
           fi
           
-          echo "🔥 MODE=$MODE"
+          echo "🔥 최종 MODE=$MODE"
           export MODE=$MODE
           python main.py
