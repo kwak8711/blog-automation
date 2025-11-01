@@ -751,4 +751,3 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
     # 최종적으로는 원래 함수 호출
     return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
 
-ory, scheduled_dt_kst)
