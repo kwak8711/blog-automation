@@ -3,7 +3,7 @@ name: "📅 Blog Automation"
 on:
   schedule:
     - cron: '0 14 * * *'   # 🇰🇷 매일 밤 11시 실행 (UTC 기준 14시)
-  workflow_dispatch:        # 수동 실행도 가능하게 유지
+  workflow_dispatch:        # 수동 실행도 가능
 
 permissions:
   contents: write
@@ -28,7 +28,7 @@ jobs:
       - name: Generate blog post (기존 로직 유지)
         run: npm run generate-blog
 
-      # ===== 신규 단계: 예약 발행 스크립트 =====
+      # ===== 추가: 예약 발행 Python 단계 =====
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -43,10 +43,9 @@ jobs:
           WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
           WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
           WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
-        run: |
-          python scripts/publish_scheduled.py
+        run: python scripts/publish_scheduled.py
 
-      # ===== 기존 커밋/푸시 로직 유지 =====
+      # ===== 기존 커밋/푸시 유지 =====
       - name: Commit and push changes
         run: |
           git config --local user.name "github-actions[bot]"
