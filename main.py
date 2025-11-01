@@ -603,15 +603,11 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-
 # ======================================================================
 # 🟣 Couchmallow 이미지 자동첨부 + 워터마크 (ADD-ON)
-#  - 기존 코드 건드리지 말고 이 블록만 맨 아래 붙이세요.
-#  - assets/ 폴더에 올려둔 PNG 중에서 랜덤으로 1개 뽑아서 씁니다.
-#  - 없으면 None 리턴해서 기존 로직이 그냥 자기 방식대로 가도록.
-#  - 워터마크는 "복제금지 / couchmallow" 로 아주 연하게 찍음.
-#  - Pillow가 필요하니까 requirements.txt에 pillow 한 줄만 추가해 주세요.
+#  - 기존 코드 위는 절대 안 건드림
+#  - assets/ 안에 있는 캐릭터 PNG 하나 뽑아서 워터마크 찍고
+#  - 워드프레스에 먼저 업로드 → 글 맨 위에 <img> 붙이고 → 원래 함수 호출
 # ======================================================================
 import os
 import random
@@ -622,23 +618,18 @@ try:
 except Exception:
     _PIL_AVAILABLE = False
 
+# 1) 에셋 폴더
+COUCHMALLOW_ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 
-# 1) 에셋 폴더 & 파일 목록 정의
-COUCHMALLOW_ASSETS_DIR = os.path.join(
-    os.path.dirname(__file__),
-    "assets"
-)
-
-# 공주님이 올릴 파일들 이름만 여기 추가해가면 됨
+# 2) 공주님이 올려둔 파일 이름들만 여기에 계속 추가하면 됨
 COUCHMALLOW_CANDIDATES = [
     "Couchmallow_AM_01_360_ivory.png",
     "Couchmallow_AM_04_360_ivory.png",
     "Couchmallow_AM_07_360_ivory.png",
 ]
 
-# 2) 랜덤으로 1개 뽑기
 def pick_couchmallow_image() -> str | None:
-    """assets/ 안에 실제로 존재하는 파일만 모아서 랜덤으로 1개 리턴"""
+    """assets/ 안에 실제 있는 것만 모아서 랜덤 1개 리턴"""
     available = []
     for name in COUCHMALLOW_CANDIDATES:
         path = os.path.join(COUCHMALLOW_ASSETS_DIR, name)
@@ -648,54 +639,40 @@ def pick_couchmallow_image() -> str | None:
         return None
     return random.choice(available)
 
-
-# 3) 워터마크 찍기
-def add_watermark(input_path: str,
-                  text: str = "Do not copy/ couchmallow",
-                  opacity: int = 60) -> str:
-    """
-    input_path 이미지를 열어서 오른쪽 아래에 연한 워터마크를 찍고
-    ./assets/_out/ 안에 새 파일로 저장한 뒤 그 경로를 리턴.
-    Pillow가 없으면 원본 경로 그대로 리턴.
-    """
+def add_watermark(
+    input_path: str,
+    text: str = "Do not copy · 복제금지 · couchmallow",
+    opacity: int = 60,
+) -> str:
+    """이미지에 영+한 워터마크 살짝 찍어서 새 파일로 저장"""
     if not _PIL_AVAILABLE:
-        # PIL 없으면 그냥 원본 사용
         return input_path
 
-    # 출력 폴더
     out_dir = os.path.join(COUCHMALLOW_ASSETS_DIR, "_out")
     os.makedirs(out_dir, exist_ok=True)
 
     base = Image.open(input_path).convert("RGBA")
     w, h = base.size
 
-    # 워터마크 레이어
     txt_layer = Image.new("RGBA", base.size, (255, 255, 255, 0))
     draw = ImageDraw.Draw(txt_layer)
 
-    # 폰트: 깃허브 액션/리눅스에서도 돌아가게 기본 폰트로
     try:
-        # 시스템에 폰트 있으면 이걸로
         font = ImageFont.truetype("arial.ttf", int(h * 0.035))
     except Exception:
         font = ImageFont.load_default()
 
     text_w, text_h = draw.textsize(text, font=font)
-
-    # 오른쪽 아래 살짝 띄워서
     margin = int(min(w, h) * 0.03)
     x = w - text_w - margin
     y = h - text_h - margin
 
-    # 연보라(공주님 톤) + 투명
-    watermark_color = (94, 73, 133, opacity)  # RGBA
-
+    # 연보라 + 투명
+    watermark_color = (94, 73, 133, opacity)
     draw.text((x, y), text, font=font, fill=watermark_color)
 
-    # 합치기
     out = Image.alpha_composite(base, txt_layer)
 
-    # 파일 이름 만들기
     base_name = os.path.basename(input_path)
     name_wo_ext, _ = os.path.splitext(base_name)
     out_path = os.path.join(out_dir, f"{name_wo_ext}_wm.png")
@@ -703,86 +680,67 @@ def add_watermark(input_path: str,
     out.convert("RGB").save(out_path, "PNG")
     return out_path
 
-
-# 4) 최종: 블로그 포스트에 쓸 이미지 하나 만들어서 경로 리턴
 def get_couchmallow_image_for_post() -> str | None:
-    """
-    1) assets/ 에서 랜덤 선택
-    2) 워터마크 찍기
-    3) 워드프레스 업로드용 로컬 경로 리턴
-    """
     src = pick_couchmallow_image()
     if not src:
         return None
     return add_watermark(src)
 
-
-# 5) 단독 테스트용 (깃허브 액션 깨지지 않게 if문)
-if __name__ == "__main__" and os.environ.get("TEST_COUCHMALLOW") == "1":
-    img = get_couchmallow_image_for_post()
-    print("generated:", img)
-
-
-
-# ======================================================================
-# 🟣 6) 워드프레스 발행 시 Couchmallow 이미지 자동 첨부 패치
-#  - 위쪽 원본 publish_to_wordpress()는 손대지 않고 아래에서 감싼다.
-#  - assets/ 안에 있는 이미지 → 워터마크 → 워드프레스에 업로드 → 본문 맨 위에 <img> 넣기
-#  - 이미지 업로드가 실패하면 그냥 원래 함수 호출해서 글만 올림.
-# ======================================================================
+# ─── 여기서부터는 "글 올릴 때 이미지도 같이 올리기" 패치 ───
 from wordpress_xmlrpc.methods import media
 from wordpress_xmlrpc.compat import xmlrpc_client
 
-# 1. 원래 함수 백업해두기
-_original_publish_to_wordpress = publish_to_wordpress  # ← 위에서 정의된 원본
+# 원래 있던 함수 백업
+_original_publish_to_wordpress = publish_to_wordpress
 
-def _upload_image_to_wp(wp_client: Client, image_path: str) -> dict | None:
-    """로컬 이미지를 워드프레스에 media로 올리고 결과 dict를 리턴"""
+def _upload_image_to_wp(wp_client: Client, image_path: str):
+    """로컬 이미지를 WP media로 업로드"""
     try:
-        with open(image_path, 'rb') as img:
+        with open(image_path, "rb") as f:
             data = {
-                'name': os.path.basename(image_path),
-                'type': 'image/png',
-                'bits': xmlrpc_client.Binary(img.read()),
+                "name": os.path.basename(image_path),
+                "type": "image/png",
+                "bits": xmlrpc_client.Binary(f.read()),
             }
-        res = wp_client.call(media.UploadFile(data))
-        # res 예시: {'id': 123, 'file': '...', 'url': 'https://...png', 'type': 'image/png'}
-        return res
+        return wp_client.call(media.UploadFile(data))
     except Exception as e:
         print(f"  ⚠️ 워드프레스 이미지 업로드 실패: {e}")
         return None
 
 def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
     """
-    기존 publish_to_wordpress 를 덮어쓰는 래퍼.
-    1) 쿠치멜로 이미지 뽑기
-    2) 워터마크 입힌 파일을 WP에 업로드
-    3) 성공하면 본문 맨 위에 <img ...> 한 줄 붙이고
-    4) 원래 함수(_original_publish_to_wordpress) 호출
+    기존 publish_to_wordpress()를 감싸는 래퍼.
+    1) 캐릭터 이미지 뽑고
+    2) 워드프레스에 먼저 올리고
+    3) 글 맨 위에 <img> 한 줄 추가하고
+    4) 원래 함수 호출
     """
-    # 1) 쿠치멜로 이미지 하나 뽑기
     img_path = get_couchmallow_image_for_post()
+
+    # 이미지 없으면 기존 로직 그대로
     if not img_path:
-        # 그냥 원래대로
         return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
 
-    # 2) 워드프레스 클라이언트 생성 (원래 함수 코드랑 동일하게 맞춰줌)
+    # WP 정보 없으면 기존 로직
     if not WORDPRESS_URL or not WORDPRESS_USERNAME or not WORDPRESS_PASSWORD:
         print("  ⚠️ 워드프레스 정보가 없어서 이미지 없이 발행합니다.")
         return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
 
     try:
         wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
-
-        # 3) 이미지 먼저 올리기
         img_res = _upload_image_to_wp(wp, img_path)
-        if img_res and 'url' in img_res:
-            img_url = img_res['url']
+
+        if img_res and "url" in img_res:
+            img_url = img_res["url"]
             print(f"  🖼️ Couchmallow 이미지 업로드 성공: {img_url}")
 
-            # 4) 본문 맨 위에 이미지 한 줄 추가
-            #    스타일은 심플하게, 공주님 톤 맞춰서 여백 조금
-            img_html = f'<p><img src="{img_url}" alt="Couchmallow" style="max-width:360px;border-radius:18px;margin-bottom:24px;"></p>\n'
+            # ←← 여기 아까 깨졌던 부분을 다시 정식 HTML로!
+            img_html = (
+                f'<p><img src="{img_url}" alt="Couchmallow" '
+                f'style="max-width:360px;border-radius:18px;margin-bottom:24px;"></p>\n'
+            )
+
+            # 본문 맨 위에 붙이기
             content = img_html + content
         else:
             print("  ⚠️ 이미지 업로드 결과에 url이 없어서 이미지 없이 발행합니다.")
@@ -790,5 +748,7 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
     except Exception as e:
         print(f"  ⚠️ 이미지 업로드 과정에서 에러. 이미지 없이 발행할게요: {e}")
 
-    # 5) 결국엔 원래 발행 함수 호출
+    # 최종적으로는 원래 함수 호출
     return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
+
+ory, scheduled_dt_kst)
