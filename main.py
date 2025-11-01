@@ -5,16 +5,6 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import NewPost
-from wordpress_xmlrpc.methods import media
-import random
-
-# PIL 이미지 처리
-try:
-    from PIL import Image, ImageDraw, ImageFont
-    PIL_AVAILABLE = True
-except:
-    PIL_AVAILABLE = False
-    print("⚠️ Pillow가 설치되지 않았습니다. 워터마크 기능이 비활성화됩니다.")
 
 # =========================
 # 환경변수
@@ -30,14 +20,6 @@ WORDPRESS_PASSWORD = os.environ.get('WORDPRESS_PASSWORD')
 MODE = os.environ.get('MODE', 'generate')
 
 KST = ZoneInfo('Asia/Seoul')
-
-# Couchmallow 캐릭터 이미지 설정
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
-CHARACTER_IMAGES = [
-    "Couchmallow_AM_01_360_ivory.png",
-    "Couchmallow_AM_04_360_ivory.png",
-    "Couchmallow_AM_07_360_ivory.png",
-]
 
 # 환경변수 체크
 print("=" * 60)
@@ -77,101 +59,6 @@ STORES = [
 ]
 
 # =========================
-# 🎨 Couchmallow 이미지 처리
-# =========================
-def pick_character_image():
-    """assets에서 랜덤으로 캐릭터 이미지 선택"""
-    available = []
-    for img in CHARACTER_IMAGES:
-        path = os.path.join(ASSETS_DIR, img)
-        if os.path.exists(path):
-            available.append(path)
-    
-    if not available:
-        print("⚠️ assets 폴더에 이미지가 없습니다!")
-        return None
-    
-    selected = random.choice(available)
-    print(f"🎨 선택된 캐릭터: {os.path.basename(selected)}")
-    return selected
-
-
-def add_watermark(image_path, text="복제금지 / couchmallow / DO NOT COPY", opacity=68):
-    """이미지에 워터마크 추가"""
-    if not PIL_AVAILABLE:
-        return image_path
-    
-    try:
-        # 출력 디렉토리
-        out_dir = os.path.join(ASSETS_DIR, "_watermarked")
-        os.makedirs(out_dir, exist_ok=True)
-        
-        # 이미지 열기
-        img = Image.open(image_path).convert("RGBA")
-        width, height = img.size
-        
-        # 워터마크 레이어
-        watermark = Image.new("RGBA", img.size, (255, 255, 255, 0))
-        draw = ImageDraw.Draw(watermark)
-        
-        # 폰트 설정
-        try:
-            font_size = int(height * 0.034)
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-        except:
-            font = ImageFont.load_default()
-        
-        # 텍스트 크기 계산
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        
-        # 오른쪽 아래 위치
-        margin = int(min(width, height) * 0.03)
-        x = width - text_width - margin
-        y = height - text_height - margin
-        
-        # 워터마크 그리기 (연보라색)
-        draw.text((x, y), text, font=font, fill=(94, 73, 133, opacity))
-        
-        # 합성
-        final = Image.alpha_composite(img, watermark)
-        
-        # 저장
-        basename = os.path.basename(image_path)
-        name, ext = os.path.splitext(basename)
-        out_path = os.path.join(out_dir, f"{name}_wm.png")
-        final.convert("RGB").save(out_path, "PNG")
-        
-        print(f"  ✅ 워터마크 추가 완료: {out_path}")
-        return out_path
-        
-    except Exception as e:
-        print(f"  ⚠️ 워터마크 실패, 원본 사용: {e}")
-        return image_path
-
-
-def upload_image_to_wordpress(wp_client, image_path):
-    """워드프레스에 이미지 업로드"""
-    try:
-        with open(image_path, 'rb') as f:
-            data = {
-                'name': os.path.basename(image_path),
-                'type': 'image/png',
-                'bits': f.read(),
-            }
-        
-        response = wp_client.call(media.UploadFile(data))
-        url = response.get('url')
-        print(f"  📤 이미지 업로드 성공: {url}")
-        return url
-        
-    except Exception as e:
-        print(f"  ❌ 이미지 업로드 실패: {e}")
-        return None
-
-
-# =========================
 # AI 호출 (Gemini → Groq → OpenAI)
 # =========================
 def call_gemini(prompt):
@@ -197,6 +84,7 @@ def call_gemini(prompt):
         result_text = response.json()['candidates'][0]['content']['parts'][0]['text']
         result = json.loads(result_text)
         
+        # Gemini가 배열로 리턴하면 첫번째 항목 사용
         if isinstance(result, list):
             result = result[0] if result else None
         
@@ -233,6 +121,7 @@ def call_groq(prompt):
         
         result = json.loads(response.json()['choices'][0]['message']['content'])
         
+        # 배열로 리턴하면 첫번째 항목 사용
         if isinstance(result, list):
             result = result[0] if result else None
         
@@ -272,6 +161,7 @@ def call_openai(prompt):
         response.raise_for_status()
         result = json.loads(response.json()['choices'][0]['message']['content'])
         
+        # 배열로 리턴하면 첫번째 항목 사용
         if isinstance(result, list):
             result = result[0] if result else None
         
@@ -317,23 +207,142 @@ def generate_blog_post(store_info):
 
 요구사항:
 - 제목: 클릭하고 싶은 제목 (이모지 포함)
-- 본문: HTML 형식 (단, 캐릭터 이미지는 제외, 자동으로 추가됨)
+- 본문: 아래 HTML 디자인 그대로 사용
 - 각 제품: 제품명, 가격(원), 맛 후기, 꿀조합, 별점, 일본어 요약
 - 친근한 MZ 말투
 
+HTML 디자인:
+<div style="max-width: 800px;margin: 0 auto;font-family: 'Malgun Gothic', sans-serif">
+
+<!-- 헤더 -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);padding: 40px 30px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<h1 style="color: white;font-size: 28px;margin: 0 0 15px 0;font-weight: bold">🛒 {name} 신상 제품 리뷰!</h1>
+<p style="color: rgba(255,255,255,0.9);font-size: 16px;margin: 0">コンビニ新商品レビュー 🇰🇷🇯🇵</p>
+</div>
+
+<!-- 인사말 -->
+<div style="background: #f8f9ff;padding: 30px;border-radius: 15px;margin-bottom: 40px;border-left: 5px solid #667eea">
+<p style="font-size: 17px;line-height: 1.8;margin: 0;color: #222;font-weight: 500">
+<strong style="font-size: 19px">안녕하세요, 편스타그램 친구들!</strong> 오늘은 {name}에서 새롭게 나온 신상 제품들을 소개해드릴게요! 🎉 [인사말 추가]
+</p>
+</div>
+
+<!-- 제품 1 -->
+<div style="background: white;padding: 35px;border-radius: 20px;margin-bottom: 35px;box-shadow: 0 5px 20px rgba(0,0,0,0.08);border: 2px solid #f0f0f0">
+<h2 style="color: #667eea;font-size: 26px;margin: 0 0 20px 0;font-weight: bold;border-bottom: 3px solid #667eea;padding-bottom: 15px">1. [제품명] [이모지]</h2>
+
+<div style="background: #fff5f5;padding: 20px;border-radius: 12px;margin-bottom: 20px">
+<p style="font-size: 18px;margin: 0;color: #e63946"><strong style="font-size: 22px">💰 가격: [가격]원</strong></p>
+</div>
+
+<p style="font-size: 16px;line-height: 1.9;color: #222;margin-bottom: 20px;font-weight: 500">
+[맛 후기 - 식감, 맛, 향 구체적으로]
+</p>
+
+<div style="background: #e8f5e9;padding: 18px;border-radius: 10px;margin-bottom: 20px">
+<p style="font-size: 16px;margin: 0;color: #2e7d32"><strong>🍯 꿀조합:</strong> [꿀조합 설명]</p>
+</div>
+
+<p style="font-size: 17px;margin-bottom: 20px"><strong>별점:</strong> ⭐⭐⭐⭐⭐</p>
+
+<div style="background: linear-gradient(to right, #fff3e0, #ffe0b2);padding: 20px;border-radius: 12px;border-left: 4px solid #ff9800">
+<p style="margin: 0 0 8px 0;font-size: 15px;color: #e65100"><strong>🇯🇵 日本語要約</strong></p>
+<p style="font-size: 14px;line-height: 1.7;color: #555;margin: 0">[일본어 요약 3-4줄]</p>
+</div>
+</div>
+
+<!-- 제품 2 동일 구조 -->
+
+<!-- 마무리 -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);padding: 35px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<p style="color: white;font-size: 18px;line-height: 1.8;margin: 0">
+오늘 소개해드린 {name} 신상 제품들, 어떠셨나요? 가성비도 좋고 맛있으니 꼭 한 번 드셔보세요! 여러분의 편의점 꿀조합도 댓글로 남겨주세요! 😊<br><br>
+<span style="font-size: 16px;opacity: 0.9">今日紹介した{name}の新商品、ぜひ試してみてください！🎌</span>
+</p>
+</div>
+
+<!-- 해시태그 -->
+<hr style="border: none;border-top: 3px solid #667eea;margin: 50px 0 30px 0">
+
+<div style="background: linear-gradient(to right, #f8f9ff, #fff5f8);padding: 30px;border-radius: 15px;text-align: center">
+<p style="margin: 0 0 15px 0;font-size: 16px;color: #667eea;font-weight: bold">📱 해시태그 / ハッシュタグ</p>
+<p style="margin: 0;font-size: 15px;color: #667eea;line-height: 2">
+#편의점신상 #コンビニ新商品 #{name} #꿀조합 #美味しい組み合わせ #편스타그램 #コンビニグルメ #MZ추천 #韓国コンビニ #편의점디저트 #コンビニデザート
+</p>
+</div>
+
+</div>
+
 JSON 형식:
-{{"title": "제목", "content": "HTML 본문", "tags": ["편의점신상", "{name}", "꿀조합"]}}
+{{"title": "제목", "content": "위 HTML 전체", "tags": ["편의점신상", "{name}", "꿀조합"]}}
 """
         else:
             prompt = f"""당신은 일본 편의점 블로거입니다. {name} 신상 제품 2개를 소개하세요.
 
 요구사항:
 - 제목: 클릭하고 싶은 제목 (한일 병기)
-- 본문: HTML 형식
+- 본문: 아래 HTML 디자인 그대로 사용
 - 각 제품: 제품명(한일), 가격(엔), 리뷰, 일본 문화 팁, 별점
 
+HTML 디자인:
+<div style="max-width: 800px;margin: 0 auto;font-family: 'Malgun Gothic', sans-serif">
+
+<!-- 헤더 -->
+<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);padding: 40px 30px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<h1 style="color: white;font-size: 28px;margin: 0 0 15px 0;font-weight: bold">🇯🇵 {name} 신상 제품 리뷰!</h1>
+<p style="color: rgba(255,255,255,0.9);font-size: 18px;margin: 0">{store_info.get('name_jp', name)} 新商品レビュー</p>
+</div>
+
+<!-- 인사말 -->
+<div style="background: #fff5f5;padding: 30px;border-radius: 15px;margin-bottom: 40px;border-left: 5px solid #ff6b6b">
+<p style="font-size: 17px;line-height: 1.8;margin: 0;color: #222;font-weight: 500">
+<strong style="font-size: 19px">안녕하세요! 일본 편의점 탐험대입니다!</strong> 🇯🇵 오늘은 일본 {name}의 신상 제품을 소개해드릴게요! [인사말 추가]
+</p>
+</div>
+
+<!-- 제품 1 -->
+<div style="background: white;padding: 35px;border-radius: 20px;margin-bottom: 35px;box-shadow: 0 5px 20px rgba(0,0,0,0.08);border: 2px solid #f0f0f0">
+<h2 style="color: #ff6b6b;font-size: 26px;margin: 0 0 20px 0;font-weight: bold;border-bottom: 3px solid #ff6b6b;padding-bottom: 15px">1. [제품명] ([일본어]) [이모지]</h2>
+
+<div style="background: #fff5f5;padding: 20px;border-radius: 12px;margin-bottom: 20px">
+<p style="font-size: 18px;margin: 0;color: #e63946"><strong style="font-size: 22px">💴 가격: [가격]엔</strong></p>
+</div>
+
+<p style="font-size: 16px;line-height: 1.9;color: #222;margin-bottom: 20px;font-weight: 500">
+[맛 후기 - 한국과 비교하며 설명]
+</p>
+
+<div style="background: #fff3cd;padding: 18px;border-radius: 10px;margin-bottom: 20px;border-left: 4px solid #ffc107">
+<p style="font-size: 16px;margin: 0;color: #856404"><strong>🎌 일본 팁:</strong> [일본 편의점 문화 팁]</p>
+</div>
+
+<p style="font-size: 17px;margin-bottom: 20px"><strong>별점:</strong> ⭐⭐⭐⭐⭐</p>
+</div>
+
+<!-- 제품 2 동일 구조 -->
+
+<!-- 마무리 -->
+<div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);padding: 35px;border-radius: 20px;margin-bottom: 40px;text-align: center;box-shadow: 0 10px 30px rgba(0,0,0,0.2)">
+<p style="color: white;font-size: 18px;line-height: 1.8;margin: 0">
+일본 여행 가시면 {name} 꼭 들러보세요! 한국에서는 맛볼 수 없는 특별한 제품들이 가득해요! 🎌<br><br>
+<span style="font-size: 16px;opacity: 0.9">日本旅行の際は、ぜひ{store_info.get('name_jp', name)}に立ち寄ってみてください！</span>
+</p>
+</div>
+
+<!-- 해시태그 -->
+<hr style="border: none;border-top: 3px solid #ff6b6b;margin: 50px 0 30px 0">
+
+<div style="background: linear-gradient(to right, #fff5f5, #ffe0e0);padding: 30px;border-radius: 15px;text-align: center">
+<p style="margin: 0 0 15px 0;font-size: 16px;color: #ff6b6b;font-weight: bold">📱 해시태그 / ハッシュタグ</p>
+<p style="margin: 0;font-size: 15px;color: #ff6b6b;line-height: 2">
+#일본편의점 #日本コンビニ #{name} #{store_info.get('name_jp', name)} #일본여행 #日本旅行 #편의점투어 #コンビニ巡り
+</p>
+</div>
+
+</div>
+
 JSON 형식:
-{{"title": "제목", "content": "HTML 본문", "tags": ["일본편의점", "{name}"]}}
+{{"title": "제목", "content": "위 HTML 전체", "tags": ["일본편의점", "{name}"]}}
 """
         
         result = generate_with_auto(prompt)
@@ -368,23 +377,6 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
         
         wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
         
-        # 🎨 Couchmallow 이미지 처리
-        character_img = pick_character_image()
-        if character_img:
-            print("  🖼️ 캐릭터 이미지 처리 중...")
-            watermarked = add_watermark(character_img)
-            img_url = upload_image_to_wordpress(wp, watermarked)
-            
-            if img_url:
-                # 본문 맨 위에 이미지 추가
-                img_html = f'''<p style="text-align:center;margin-bottom:28px">
-<img src="{img_url}" alt="Couchmallow" style="max-width:360px;border-radius:18px;box-shadow:0 4px 16px rgba(0,0,0,.06);" />
-</p>
-'''
-                content = img_html + content
-                print("  ✅ 캐릭터 이미지 추가 완료!")
-        
-        # 워드프레스 포스트 생성
         post = WordPressPost()
         post.title = title
         post.content = content
@@ -396,6 +388,7 @@ def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
         post.date_gmt = dt_utc.replace(tzinfo=None)
         
         print(f"  📅 예약 시간: {scheduled_dt_kst.strftime('%Y-%m-%d %H:%M')} (KST)")
+        print(f"  📅 예약 시간: {dt_utc.strftime('%Y-%m-%d %H:%M')} (UTC)")
         
         post_id = wp.call(NewPost(post))
         url = f"{WORDPRESS_URL}/?p={post_id}"
@@ -422,7 +415,14 @@ def send_slack(message):
         return False
         
     try:
+        print(f"  📤 슬랙 전송 시도...")
+        print(f"  📝 메시지 길이: {len(message)} 자")
+        print(f"  🔗 Webhook URL: {SLACK_WEBHOOK_URL[:50]}...")
+        
         response = requests.post(SLACK_WEBHOOK_URL, json={'text': message}, timeout=10)
+        
+        print(f"  📊 응답 코드: {response.status_code}")
+        print(f"  📄 응답 내용: {response.text[:200]}")
         
         if response.status_code == 200:
             print(f"  ✅ 슬랙 전송 성공!")
@@ -433,6 +433,8 @@ def send_slack(message):
             
     except Exception as e:
         print(f"  ❌ 슬랙 전송 에러: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -521,12 +523,14 @@ def generate_and_schedule():
         print(f"{'='*60}")
         
         try:
+            # AI 콘텐츠 생성
             content = generate_blog_post(store_info)
             
             if not content:
                 print(f"  ❌ [{i+1}] 콘텐츠 생성 실패!")
                 continue
             
+            # 워드프레스 예약발행
             result = publish_to_wordpress(
                 content['title'],
                 content['content'],
@@ -556,6 +560,7 @@ def generate_and_schedule():
     print(f"🎉 완료! 총 {len(results)}개 글 예약 성공!")
     print(f"{'='*60}")
     
+    # 슬랙 알림
     if results:
         send_generation_complete_slack(results)
     
@@ -597,3 +602,193 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+# ======================================================================
+# 🟣 Couchmallow 이미지 자동첨부 + 워터마크 (ADD-ON)
+#  - 기존 코드 건드리지 말고 이 블록만 맨 아래 붙이세요.
+#  - assets/ 폴더에 올려둔 PNG 중에서 랜덤으로 1개 뽑아서 씁니다.
+#  - 없으면 None 리턴해서 기존 로직이 그냥 자기 방식대로 가도록.
+#  - 워터마크는 "복제금지 / couchmallow" 로 아주 연하게 찍음.
+#  - Pillow가 필요하니까 requirements.txt에 pillow 한 줄만 추가해 주세요.
+# ======================================================================
+import os
+import random
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _PIL_AVAILABLE = True
+except Exception:
+    _PIL_AVAILABLE = False
+
+
+# 1) 에셋 폴더 & 파일 목록 정의
+COUCHMALLOW_ASSETS_DIR = os.path.join(
+    os.path.dirname(__file__),
+    "assets"
+)
+
+# 공주님이 올릴 파일들 이름만 여기 추가해가면 됨
+COUCHMALLOW_CANDIDATES = [
+    "Couchmallow_AM_01_360_ivory.png",
+    "Couchmallow_AM_04_360_ivory.png",
+    "Couchmallow_AM_07_360_ivory.png",
+]
+
+# 2) 랜덤으로 1개 뽑기
+def pick_couchmallow_image() -> str | None:
+    """assets/ 안에 실제로 존재하는 파일만 모아서 랜덤으로 1개 리턴"""
+    available = []
+    for name in COUCHMALLOW_CANDIDATES:
+        path = os.path.join(COUCHMALLOW_ASSETS_DIR, name)
+        if os.path.exists(path):
+            available.append(path)
+    if not available:
+        return None
+    return random.choice(available)
+
+
+# 3) 워터마크 찍기
+def add_watermark(input_path: str,
+                  text: str = "Do not copy/ couchmallow",
+                  opacity: int = 60) -> str:
+    """
+    input_path 이미지를 열어서 오른쪽 아래에 연한 워터마크를 찍고
+    ./assets/_out/ 안에 새 파일로 저장한 뒤 그 경로를 리턴.
+    Pillow가 없으면 원본 경로 그대로 리턴.
+    """
+    if not _PIL_AVAILABLE:
+        # PIL 없으면 그냥 원본 사용
+        return input_path
+
+    # 출력 폴더
+    out_dir = os.path.join(COUCHMALLOW_ASSETS_DIR, "_out")
+    os.makedirs(out_dir, exist_ok=True)
+
+    base = Image.open(input_path).convert("RGBA")
+    w, h = base.size
+
+    # 워터마크 레이어
+    txt_layer = Image.new("RGBA", base.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(txt_layer)
+
+    # 폰트: 깃허브 액션/리눅스에서도 돌아가게 기본 폰트로
+    try:
+        # 시스템에 폰트 있으면 이걸로
+        font = ImageFont.truetype("arial.ttf", int(h * 0.035))
+    except Exception:
+        font = ImageFont.load_default()
+
+    text_w, text_h = draw.textsize(text, font=font)
+
+    # 오른쪽 아래 살짝 띄워서
+    margin = int(min(w, h) * 0.03)
+    x = w - text_w - margin
+    y = h - text_h - margin
+
+    # 연보라(공주님 톤) + 투명
+    watermark_color = (94, 73, 133, opacity)  # RGBA
+
+    draw.text((x, y), text, font=font, fill=watermark_color)
+
+    # 합치기
+    out = Image.alpha_composite(base, txt_layer)
+
+    # 파일 이름 만들기
+    base_name = os.path.basename(input_path)
+    name_wo_ext, _ = os.path.splitext(base_name)
+    out_path = os.path.join(out_dir, f"{name_wo_ext}_wm.png")
+
+    out.convert("RGB").save(out_path, "PNG")
+    return out_path
+
+
+# 4) 최종: 블로그 포스트에 쓸 이미지 하나 만들어서 경로 리턴
+def get_couchmallow_image_for_post() -> str | None:
+    """
+    1) assets/ 에서 랜덤 선택
+    2) 워터마크 찍기
+    3) 워드프레스 업로드용 로컬 경로 리턴
+    """
+    src = pick_couchmallow_image()
+    if not src:
+        return None
+    return add_watermark(src)
+
+
+# 5) 단독 테스트용 (깃허브 액션 깨지지 않게 if문)
+if __name__ == "__main__" and os.environ.get("TEST_COUCHMALLOW") == "1":
+    img = get_couchmallow_image_for_post()
+    print("generated:", img)
+
+
+
+# ======================================================================
+# 🟣 6) 워드프레스 발행 시 Couchmallow 이미지 자동 첨부 패치
+#  - 위쪽 원본 publish_to_wordpress()는 손대지 않고 아래에서 감싼다.
+#  - assets/ 안에 있는 이미지 → 워터마크 → 워드프레스에 업로드 → 본문 맨 위에 <img> 넣기
+#  - 이미지 업로드가 실패하면 그냥 원래 함수 호출해서 글만 올림.
+# ======================================================================
+from wordpress_xmlrpc.methods import media
+from wordpress_xmlrpc.compat import xmlrpc_client
+
+# 1. 원래 함수 백업해두기
+_original_publish_to_wordpress = publish_to_wordpress  # ← 위에서 정의된 원본
+
+def _upload_image_to_wp(wp_client: Client, image_path: str) -> dict | None:
+    """로컬 이미지를 워드프레스에 media로 올리고 결과 dict를 리턴"""
+    try:
+        with open(image_path, 'rb') as img:
+            data = {
+                'name': os.path.basename(image_path),
+                'type': 'image/png',
+                'bits': xmlrpc_client.Binary(img.read()),
+            }
+        res = wp_client.call(media.UploadFile(data))
+        # res 예시: {'id': 123, 'file': '...', 'url': 'https://...png', 'type': 'image/png'}
+        return res
+    except Exception as e:
+        print(f"  ⚠️ 워드프레스 이미지 업로드 실패: {e}")
+        return None
+
+def publish_to_wordpress(title, content, tags, category, scheduled_dt_kst):
+    """
+    기존 publish_to_wordpress 를 덮어쓰는 래퍼.
+    1) 쿠치멜로 이미지 뽑기
+    2) 워터마크 입힌 파일을 WP에 업로드
+    3) 성공하면 본문 맨 위에 <img ...> 한 줄 붙이고
+    4) 원래 함수(_original_publish_to_wordpress) 호출
+    """
+    # 1) 쿠치멜로 이미지 하나 뽑기
+    img_path = get_couchmallow_image_for_post()
+    if not img_path:
+        # 그냥 원래대로
+        return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
+
+    # 2) 워드프레스 클라이언트 생성 (원래 함수 코드랑 동일하게 맞춰줌)
+    if not WORDPRESS_URL or not WORDPRESS_USERNAME or not WORDPRESS_PASSWORD:
+        print("  ⚠️ 워드프레스 정보가 없어서 이미지 없이 발행합니다.")
+        return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
+
+    try:
+        wp = Client(f"{WORDPRESS_URL}/xmlrpc.php", WORDPRESS_USERNAME, WORDPRESS_PASSWORD)
+
+        # 3) 이미지 먼저 올리기
+        img_res = _upload_image_to_wp(wp, img_path)
+        if img_res and 'url' in img_res:
+            img_url = img_res['url']
+            print(f"  🖼️ Couchmallow 이미지 업로드 성공: {img_url}")
+
+            # 4) 본문 맨 위에 이미지 한 줄 추가
+            #    스타일은 심플하게, 공주님 톤 맞춰서 여백 조금
+            img_html = f'<p><img src="{img_url}" alt="Couchmallow" style="max-width:360px;border-radius:18px;margin-bottom:24px;"></p>\n'
+            content = img_html + content
+        else:
+            print("  ⚠️ 이미지 업로드 결과에 url이 없어서 이미지 없이 발행합니다.")
+
+    except Exception as e:
+        print(f"  ⚠️ 이미지 업로드 과정에서 에러. 이미지 없이 발행할게요: {e}")
+
+    # 5) 결국엔 원래 발행 함수 호출
+    return _original_publish_to_wordpress(title, content, tags, category, scheduled_dt_kst)
