@@ -602,3 +602,123 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+# ======================================================================
+# 🟣 Couchmallow 이미지 자동첨부 + 워터마크 (ADD-ON)
+#  - 기존 코드 건드리지 말고 이 블록만 맨 아래 붙이세요.
+#  - assets/ 폴더에 올려둔 PNG 중에서 랜덤으로 1개 뽑아서 씁니다.
+#  - 없으면 None 리턴해서 기존 로직이 그냥 자기 방식대로 가도록.
+#  - 워터마크는 "복제금지 / couchmallow" 로 아주 연하게 찍음.
+#  - Pillow가 필요하니까 requirements.txt에 pillow 한 줄만 추가해 주세요.
+# ======================================================================
+import os
+import random
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _PIL_AVAILABLE = True
+except Exception:
+    _PIL_AVAILABLE = False
+
+
+# 1) 에셋 폴더 & 파일 목록 정의
+COUCHMALLOW_ASSETS_DIR = os.path.join(
+    os.path.dirname(__file__),
+    "assets"
+)
+
+# 공주님이 올릴 파일들 이름만 여기 추가해가면 됨
+COUCHMALLOW_CANDIDATES = [
+    "Couchmallow_AM_01_360_ivory.png",
+    "Couchmallow_AM_04_360_ivory.png",
+    "Couchmallow_AM_07_360_ivory.png",
+]
+
+# 2) 랜덤으로 1개 뽑기
+def pick_couchmallow_image() -> str | None:
+    """assets/ 안에 실제로 존재하는 파일만 모아서 랜덤으로 1개 리턴"""
+    available = []
+    for name in COUCHMALLOW_CANDIDATES:
+        path = os.path.join(COUCHMALLOW_ASSETS_DIR, name)
+        if os.path.exists(path):
+            available.append(path)
+    if not available:
+        return None
+    return random.choice(available)
+
+
+# 3) 워터마크 찍기
+def add_watermark(input_path: str,
+                  text: str = "복제금지 / couchmallow",
+                  opacity: int = 60) -> str:
+    """
+    input_path 이미지를 열어서 오른쪽 아래에 연한 워터마크를 찍고
+    ./assets/_out/ 안에 새 파일로 저장한 뒤 그 경로를 리턴.
+    Pillow가 없으면 원본 경로 그대로 리턴.
+    """
+    if not _PIL_AVAILABLE:
+        # PIL 없으면 그냥 원본 사용
+        return input_path
+
+    # 출력 폴더
+    out_dir = os.path.join(COUCHMALLOW_ASSETS_DIR, "_out")
+    os.makedirs(out_dir, exist_ok=True)
+
+    base = Image.open(input_path).convert("RGBA")
+    w, h = base.size
+
+    # 워터마크 레이어
+    txt_layer = Image.new("RGBA", base.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(txt_layer)
+
+    # 폰트: 깃허브 액션/리눅스에서도 돌아가게 기본 폰트로
+    try:
+        # 시스템에 폰트 있으면 이걸로
+        font = ImageFont.truetype("arial.ttf", int(h * 0.035))
+    except Exception:
+        font = ImageFont.load_default()
+
+    text_w, text_h = draw.textsize(text, font=font)
+
+    # 오른쪽 아래 살짝 띄워서
+    margin = int(min(w, h) * 0.03)
+    x = w - text_w - margin
+    y = h - text_h - margin
+
+    # 연보라(공주님 톤) + 투명
+    watermark_color = (94, 73, 133, opacity)  # RGBA
+
+    draw.text((x, y), text, font=font, fill=watermark_color)
+
+    # 합치기
+    out = Image.alpha_composite(base, txt_layer)
+
+    # 파일 이름 만들기
+    base_name = os.path.basename(input_path)
+    name_wo_ext, _ = os.path.splitext(base_name)
+    out_path = os.path.join(out_dir, f"{name_wo_ext}_wm.png")
+
+    out.convert("RGB").save(out_path, "PNG")
+    return out_path
+
+
+# 4) 최종: 블로그 포스트에 쓸 이미지 하나 만들어서 경로 리턴
+def get_couchmallow_image_for_post() -> str | None:
+    """
+    1) assets/ 에서 랜덤 선택
+    2) 워터마크 찍기
+    3) 워드프레스 업로드용 로컬 경로 리턴
+    """
+    src = pick_couchmallow_image()
+    if not src:
+        return None
+    return add_watermark(src)
+
+
+# 5) 단독 테스트용 (깃허브 액션 깨지지 않게 if문)
+if __name__ == "__main__" and os.environ.get("TEST_COUCHMALLOW") == "1":
+    img = get_couchmallow_image_for_post()
+    print("generated:", img)
+
